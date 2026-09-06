@@ -1,0 +1,54 @@
+# macOS / Xcode
+.DS_Store
+*.swp
+*~.nib
+*.pbxuser
+!default.pbxuser
+*.mode1v3
+!default.mode1v3
+*.mode2v3
+!default.mode2v3
+*.perspectivev3
+!default.perspectivev3
+*.xccheckout
+*.moved-aside
+*.hmap
+*.ipa
+*.dSYM
+*.dSYM.zip
+*.xcuserstate
+xcuserdata/
+timeline.xctimeline
+playground.xcworkspace
+*.xcresult
+
+# Build products
+build/
+Build/
+dist/
+DerivedData/
+DerivedDataRelease/
+
+# Swift Package Manager
+.build/
+.swiftpm
+
+# CocoaPods / Carthage (unused, but keep ignored)
+Pods/
+Carthage/Build/
+
+# fastlane
+fastlane/report.xml
+fastlane/Preview.html
+fastlane/screenshots/**/*.png
+fastlane/test_output
+
+# Local tools and secrets
+.cursor/
+.codex/
+.env
+.env.*
+*.p12
+*.mobileprovision
+*.pem
+secrets/
