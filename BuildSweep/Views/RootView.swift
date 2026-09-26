@@ -18,6 +18,13 @@ struct RootView: View {
                     ToolbarItemGroup {
                         scanToolbarItem
                         Button {
+                            model.selectXcodeRebuildableCaches()
+                        } label: {
+                            Label("Select Safe Caches", systemImage: "checkmark.circle")
+                        }
+                        .disabled(model.snapshot.allItems.allSatisfy { $0.kind != .derivedData && $0.kind != .compilerCache })
+                        .help("Select only rebuildable Xcode Derived Data and compiler caches.")
+                        Button {
                             model.prepareCleanup()
                         } label: {
                             Label("Review Cleanup", systemImage: "trash")
@@ -135,4 +142,3 @@ private struct SidebarSafetyCallout: View {
         .accessibilityElement(children: .combine)
     }
 }
-

@@ -54,7 +54,7 @@ actor XcodeStorageScanner: StorageScanner {
                 lastUsedAt: lastAccess,
                 risk: .regenerates,
                 action: .trash,
-                isDefaultSelected: !context.xcodeIsRunning,
+                isDefaultSelected: false,
                 metadata: ["Workspace": workspace ?? "Unknown", "Folder": child.lastPathComponent]
             ))
         }

@@ -264,6 +264,13 @@ final class AppModel {
         else { selectedItemIDs.insert(item.id) }
     }
 
+    func selectXcodeRebuildableCaches() {
+        let safeKinds: Set<StorageItemKind> = [.derivedData, .compilerCache]
+        selectedItemIDs = Set(snapshot.allItems.compactMap { item in
+            safeKinds.contains(item.kind) && item.action == .trash ? item.id : nil
+        })
+    }
+
     func prepareCleanup() {
         do {
             let plan = try planner.makePlan(

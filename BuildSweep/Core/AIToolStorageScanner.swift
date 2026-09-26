@@ -138,7 +138,7 @@ actor AIToolStorageScanner: StorageScanner {
                 lastUsedAt: values?.contentModificationDate,
                 risk: .regenerates,
                 action: .trash,
-                isDefaultSelected: !isRunning,
+                isDefaultSelected: false,
                 metadata: ["Tool": tool, "Folder": name]
             ))
         }
@@ -166,7 +166,7 @@ actor AIToolStorageScanner: StorageScanner {
             lastUsedAt: values?.contentModificationDate,
             risk: .regenerates,
             action: .trash,
-            isDefaultSelected: !isRunning,
+            isDefaultSelected: false,
             metadata: ["Tool": tool, "Folder": root.lastPathComponent]
         )
     }
