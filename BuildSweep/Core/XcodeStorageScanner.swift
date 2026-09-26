@@ -83,7 +83,6 @@ actor XcodeStorageScanner: StorageScanner {
                 url: url,
                 size: size,
                 modifiedAt: values?.contentModificationDate,
-                lastUsedAt: values?.contentModificationDate,
                 risk: .important,
                 action: .trash,
                 metadata: [
@@ -120,7 +119,6 @@ actor XcodeStorageScanner: StorageScanner {
                     url: child,
                     size: size,
                     modifiedAt: values?.contentModificationDate,
-                    lastUsedAt: values?.contentModificationDate,
                     risk: .reviewFirst,
                     action: .trash,
                     metadata: [

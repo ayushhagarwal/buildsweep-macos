@@ -46,7 +46,7 @@ struct HistoryView: View {
                     } label: {
                         HStack {
                             VStack(alignment: .leading) {
-                                Text(BuildSweepFormatters.bytes(session.recoveredSize) + " recovered")
+                                Text(BuildSweepFormatters.bytes(session.recoveredSize) + " estimated recovered")
                                     .fontWeight(.semibold)
                                     .foregroundStyle(BuildSweepTheme.accent)
                                 Text(session.completedAt.formatted(date: .abbreviated, time: .shortened))
@@ -69,4 +69,3 @@ struct HistoryView: View {
         .navigationTitle("History")
     }
 }
-

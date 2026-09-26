@@ -50,9 +50,9 @@ struct DashboardView: View {
                 systemImage: "externaldrive"
             )
             MetricCard(
-                title: "Reclaimable",
+                title: "Estimated reclaimable",
                 value: BuildSweepFormatters.bytes(model.snapshot.reclaimableSize),
-                detail: "Supported cleanup items",
+                detail: "Allocated size; actual free space may differ",
                 systemImage: "sparkles",
                 emphasized: true,
                 tint: BuildSweepTheme.accent

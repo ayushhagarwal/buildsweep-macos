@@ -44,7 +44,7 @@ struct CategoryView: View {
                     IconTile(systemImage: category.systemImage, tint: BuildSweepTheme.categoryForeground(for: category), size: 40)
                     VStack(alignment: .leading, spacing: 4) {
                         Text(category.title).font(.largeTitle.bold())
-                        Text("\(items.count) items · \(BuildSweepFormatters.bytes(items.reduce(0) { $0 + $1.size }))")
+                        Text("\(items.count) items · \(BuildSweepFormatters.bytes(items.reduce(0) { $0 + $1.size })) estimated")
                             .foregroundStyle(.secondary)
                     }
                 }
@@ -162,10 +162,12 @@ private struct StorageItemRow: View {
                         .lineLimit(1)
                 }
                 Spacer()
-                Text(BuildSweepFormatters.date(item.lastUsedAt ?? item.modifiedAt))
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
-                    .frame(width: 120, alignment: .trailing)
+                VStack(alignment: .trailing, spacing: 2) {
+                    Text(dateLabel).font(.caption2).foregroundStyle(.tertiary)
+                    Text(BuildSweepFormatters.date(item.lastUsedAt ?? item.modifiedAt))
+                        .font(.caption).foregroundStyle(.secondary)
+                }
+                .frame(width: 120, alignment: .trailing)
                 RiskBadge(risk: item.risk)
                     .frame(width: 110)
                 Text(BuildSweepFormatters.bytes(item.size))
@@ -276,5 +278,11 @@ private struct StorageItemRow: View {
         case .cursorCache, .codexCache, .claudeCache: "cpu"
         default: "externaldrive.fill"
         }
+    }
+
+    private var dateLabel: String {
+        if item.lastUsedAt != nil { return "Last accessed" }
+        if item.modifiedAt != nil { return "Modified" }
+        return "Date unavailable"
     }
 }

@@ -172,7 +172,7 @@ struct CleanupResultView: View {
                         Text(BuildSweepFormatters.bytes(result.recoveredSize))
                             .font(.system(size: 34, weight: .bold, design: .rounded))
                             .foregroundStyle(BuildSweepTheme.accent)
-                        Text("recovered")
+                        Text("estimated recovered")
                             .font(.title3)
                             .foregroundStyle(.secondary)
                     }
