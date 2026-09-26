@@ -58,7 +58,7 @@ actor DirectorySizer {
             try Task.checkCancellation()
             let childValues = try? child.resourceValues(forKeys: [.isDirectoryKey, .isSymbolicLinkKey, .contentModificationDateKey])
             let isSymlink = childValues?.isSymbolicLink == true
-            let size = isSymlink ? nil : try? await allocatedSize(of: child)
+            let size = isSymlink ? nil : try? allocatedSize(of: child)
             children.append(StorageChildSummary(
                 url: child,
                 isDirectory: childValues?.isDirectory == true,

@@ -247,7 +247,7 @@ private struct StorageItemRow: View {
 
     @ViewBuilder
     private var childContents: some View {
-        if let url = item.url {
+        if item.url != nil {
             VStack(alignment: .leading, spacing: 6) {
                 Text("Contents").font(.caption.weight(.semibold))
                 if isInspecting {
