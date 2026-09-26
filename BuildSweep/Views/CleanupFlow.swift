@@ -1,3 +1,4 @@
+import AppKit
 import SwiftUI
 
 struct CleanupReviewView: View {
@@ -46,7 +47,7 @@ struct CleanupReviewView: View {
                     IconTile(systemImage: "trash", size: 40)
                     VStack(alignment: .leading, spacing: 4) {
                         Text("Review cleanup").font(.largeTitle.bold())
-                        Text("\(plan.items.count) items · \(BuildSweepFormatters.bytes(plan.selectedSize)) selected")
+                        Text("\(plan.items.count) items · \(BuildSweepFormatters.bytes(plan.selectedSize)) estimated")
                             .foregroundStyle(.secondary)
                     }
                 }
@@ -92,7 +93,7 @@ struct CleanupReviewView: View {
                 }
 
                 HStack {
-                    Text("Selected files move to Trash.")
+                    Text("Selected files move to Trash. Emptying Trash makes them unrecoverable.")
                         .font(.callout)
                         .foregroundStyle(.secondary)
                     Spacer()
@@ -134,7 +135,12 @@ struct CleanupReviewView: View {
                         .foregroundStyle(destructive ? BuildSweepTheme.important : BuildSweepTheme.accent)
                     VStack(alignment: .leading) {
                         Text(value.item.displayName).fontWeight(.medium)
-                        Text(value.item.risk.title).font(.caption).foregroundStyle(.secondary)
+                        Text(value.item.url?.path(percentEncoded: false) ?? value.item.id)
+                            .font(.caption.monospaced()).textSelection(.enabled)
+                        Text("Why: \(eligibilityReason(for: value.item))")
+                            .font(.caption).foregroundStyle(.secondary)
+                        Text("Effect: \(expectedEffect(for: value.item))")
+                            .font(.caption).foregroundStyle(.secondary)
                     }
                     Spacer()
                     Text(BuildSweepFormatters.bytes(value.item.size)).monospacedDigit()
@@ -148,6 +154,34 @@ struct CleanupReviewView: View {
         .overlay {
             RoundedRectangle(cornerRadius: 16, style: .continuous)
                 .stroke(destructive ? BuildSweepTheme.important.opacity(0.45) : BuildSweepTheme.border, lineWidth: 1)
+        }
+    }
+
+    private func eligibilityReason(for item: StorageItem) -> String {
+        switch item.kind {
+        case .derivedData: "Known Xcode Derived Data project folder."
+        case .compilerCache: "Known Xcode compiler cache folder."
+        case .archive: "Recognized .xcarchive package under Xcode Archives."
+        case .deviceSupport: "Recognized immediate child of an Xcode DeviceSupport folder."
+        case .documentation: "Known Xcode documentation cache location."
+        case .deviceLog: "Known Xcode device log location; review its contents first."
+        case .xcodeCache: "Known direct child of the optional Xcode cache folder."
+        case .cursorCache, .codexCache, .claudeCache: "Allowlisted cache or log folder in the granted tool location."
+        case .previewData, .simulatorDevice, .simulatorRuntime: "This item is not currently eligible for cleanup."
+        }
+    }
+
+    private func expectedEffect(for item: StorageItem) -> String {
+        switch item.kind {
+        case .derivedData: "Xcode can rebuild this data; the next build may take longer."
+        case .compilerCache: "Xcode recreates these caches as needed."
+        case .archive: "Removes this archive and its dSYMs; you may lose the ability to distribute or symbolicate this build."
+        case .deviceSupport: "Xcode may need to download symbols again to debug devices on this OS version."
+        case .documentation: "Xcode may need to download this documentation again."
+        case .deviceLog: "Removes diagnostic records that may help investigate device issues."
+        case .xcodeCache: "Xcode can recreate this cache."
+        case .cursorCache, .codexCache, .claudeCache: "The tool may regenerate cache data; logs can contain useful diagnostics."
+        case .previewData, .simulatorDevice, .simulatorRuntime: item.risk.explanation
         }
     }
 }
@@ -182,9 +216,16 @@ struct CleanupResultView: View {
                     HStack {
                         Image(systemName: item.succeeded ? "checkmark.circle.fill" : "xmark.circle.fill")
                             .foregroundStyle(item.succeeded ? .green : .red)
-                        VStack(alignment: .leading) {
+                        VStack(alignment: .leading, spacing: 4) {
                             Text(item.displayName)
                             Text(item.message).font(.caption).foregroundStyle(.secondary)
+                            if let trashedURL = item.trashedURL {
+                                Button("Show in Finder") {
+                                    NSWorkspace.shared.activateFileViewerSelecting([trashedURL])
+                                }
+                                .buttonStyle(.link)
+                                .font(.caption)
+                            }
                         }
                         Spacer()
                         Text(BuildSweepFormatters.bytes(item.size)).monospacedDigit()
@@ -196,7 +237,7 @@ struct CleanupResultView: View {
                 .surfaceCard()
 
                 if result.hadAnySuccess {
-                    Text("Files moved to Trash can be restored from Finder until Trash is emptied. Permanent Simulator actions are listed separately above.")
+                    Text("Files moved to Trash can be restored from Finder until Trash is emptied. BuildSweep cannot recover items after Trash is emptied. Permanent Simulator actions are listed separately above.")
                         .font(.callout)
                         .foregroundStyle(.secondary)
                 }

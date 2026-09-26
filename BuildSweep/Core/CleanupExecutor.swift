@@ -1,13 +1,14 @@
 import Foundation
 
 protocol TrashRouting: Sendable {
-    func moveToTrash(_ url: URL) throws
+    func moveToTrash(_ url: URL) throws -> URL?
 }
 
 struct SystemTrashRouter: TrashRouting {
-    func moveToTrash(_ url: URL) throws {
+    func moveToTrash(_ url: URL) throws -> URL? {
         var resultingURL: NSURL?
         try FileManager.default.trashItem(at: url, resultingItemURL: &resultingURL)
+        return resultingURL.map { $0 as URL }
     }
 }
 
@@ -34,6 +35,7 @@ actor DefaultCleanupExecutor: CleanupExecuting {
             if Task.isCancelled { break }
             do {
                 let successMessage: String
+                var trashedURL: URL?
                 switch planned.item.action {
                 case .trash:
                     let didAccess = planned.authorizedRoot.startAccessingSecurityScopedResource()
@@ -49,7 +51,7 @@ actor DefaultCleanupExecutor: CleanupExecuting {
                     guard currentIdentity == expectedIdentity else {
                         throw CleanupPolicyError.identityChanged(planned.item.displayName)
                     }
-                    try trashRouter.moveToTrash(url)
+                    trashedURL = try trashRouter.moveToTrash(url)
                     successMessage = "Moved to Trash"
                 case .permanentSimulatorDeletion:
                     try await simulatorController.deleteDevice(id: planned.item.id)
@@ -57,9 +59,9 @@ actor DefaultCleanupExecutor: CleanupExecuting {
                 case .inspectionOnly:
                     throw CleanupPolicyError.inspectionOnly(planned.item.displayName)
                 }
-                results.append(CleanupItemResult(itemID: planned.item.id, displayName: planned.item.displayName, size: planned.item.size, succeeded: true, message: successMessage))
+                results.append(CleanupItemResult(itemID: planned.item.id, displayName: planned.item.displayName, size: planned.item.size, succeeded: true, message: successMessage, trashedURL: trashedURL))
             } catch {
-                results.append(CleanupItemResult(itemID: planned.item.id, displayName: planned.item.displayName, size: planned.item.size, succeeded: false, message: error.localizedDescription))
+                results.append(CleanupItemResult(itemID: planned.item.id, displayName: planned.item.displayName, size: planned.item.size, succeeded: false, message: error.localizedDescription, trashedURL: nil))
             }
         }
 

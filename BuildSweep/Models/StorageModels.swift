@@ -413,6 +413,7 @@ struct CleanupItemResult: Identifiable, Codable, Hashable, Sendable {
     let size: Int64
     let succeeded: Bool
     let message: String
+    let trashedURL: URL?
 }
 
 struct CleanupSessionResult: Identifiable, Codable, Hashable, Sendable {

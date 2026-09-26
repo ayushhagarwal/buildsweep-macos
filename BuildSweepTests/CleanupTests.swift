@@ -3,7 +3,7 @@ import XCTest
 
 private final class TrashSpy: TrashRouting, @unchecked Sendable {
     private(set) var urls: [URL] = []
-    func moveToTrash(_ url: URL) throws { urls.append(url) }
+    func moveToTrash(_ url: URL) throws -> URL? { urls.append(url); return nil }
 }
 
 final class CleanupTests: XCTestCase {
