@@ -1,4 +1,3 @@
-import Security
 import XCTest
 @testable import BuildSweep
 
@@ -7,19 +6,8 @@ private final class TrashSpy: TrashRouting, @unchecked Sendable {
     func moveToTrash(_ url: URL) throws { urls.append(url) }
 }
 
-private actor FreeCleanupSpy: FreeCleanupAccounting {
-    var used = 0
-    func usedCount() -> Int { used }
-    func recordUse() { used += 1 }
-}
-
-private actor FailingFreeCleanupSpy: FreeCleanupAccounting {
-    func usedCount() -> Int { 0 }
-    func recordUse() throws { throw KeychainError.status(errSecInteractionNotAllowed) }
-}
-
 final class CleanupTests: XCTestCase {
-    func testPartialSuccessConsumesFreeSessionAfterFirstSuccess() async throws {
+    func testPartialSuccessReportsSucceededAndFailedItems() async throws {
         let root = FileManager.default.temporaryDirectory.appending(path: UUID().uuidString)
         defer { try? FileManager.default.removeItem(at: root) }
         let first = root.appending(path: "Xcode/DerivedData/First-hash")
@@ -31,12 +19,10 @@ final class CleanupTests: XCTestCase {
             CleanupPlanItem(item: firstItem, authorizedRoot: root, canonicalURLAtPlanning: first.canonicalFileURL),
             CleanupPlanItem(item: missingItem, authorizedRoot: root, canonicalURLAtPlanning: missing.canonicalFileURL)
         ])
-        let freeStore = FreeCleanupSpy()
-        let result = await DefaultCleanupExecutor(trashRouter: TrashSpy(), freeCleanupStore: freeStore).execute(plan)
+        let result = await DefaultCleanupExecutor(trashRouter: TrashSpy()).execute(plan)
         XCTAssertEqual(result.succeededItems.count, 1)
         XCTAssertEqual(result.failedItems.count, 1)
-        let used = await freeStore.usedCount()
-        XCTAssertEqual(used, 1)
+        XCTAssertEqual(result.results[0].message, "Moved to Trash")
     }
 
     func testPlannerRejectsInspectionOnlyItems() throws {
@@ -45,7 +31,7 @@ final class CleanupTests: XCTestCase {
         XCTAssertThrowsError(try DefaultCleanupPlanner().makePlan(from: CleanupSelection(itemIDs: [item.id]), snapshot: snapshot, roots: []))
     }
 
-    func testSuccessfulTrashMoveIsNotReportedAsFailedWhenAccountingNeedsAttention() async throws {
+    func testSuccessfulTrashMoveReportsSuccess() async throws {
         let root = FileManager.default.temporaryDirectory.appending(path: UUID().uuidString)
         defer { try? FileManager.default.removeItem(at: root) }
         let url = root.appending(path: "Xcode/DerivedData/Atlas-hash")
@@ -55,9 +41,9 @@ final class CleanupTests: XCTestCase {
             CleanupPlanItem(item: item, authorizedRoot: root, canonicalURLAtPlanning: url.canonicalFileURL)
         ])
 
-        let result = await DefaultCleanupExecutor(trashRouter: TrashSpy(), freeCleanupStore: FailingFreeCleanupSpy()).execute(plan)
+        let result = await DefaultCleanupExecutor(trashRouter: TrashSpy()).execute(plan)
 
         XCTAssertEqual(result.succeededItems.count, 1)
-        XCTAssertTrue(result.results[0].message.contains("marker needs attention"))
+        XCTAssertEqual(result.results[0].message, "Moved to Trash")
     }
 }

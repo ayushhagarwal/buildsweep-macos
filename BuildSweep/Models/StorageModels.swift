@@ -390,25 +390,6 @@ struct CleanupSessionResult: Identifiable, Codable, Hashable, Sendable {
     var hadAnySuccess: Bool { !succeededItems.isEmpty }
 }
 
-enum ProEntitlementState: String, Codable, Sendable {
-    case unknown
-    case free
-    case pro
-    case revoked
-}
-
-struct PurchaseProduct: Sendable {
-    let displayName: String
-    let description: String
-    let displayPrice: String
-}
-
-enum PurchaseOutcome: Sendable {
-    case purchased
-    case pending
-    case cancelled
-}
-
 struct SimulatorDevice: Identifiable, Codable, Hashable, Sendable {
     let id: String
     let name: String
@@ -458,12 +439,5 @@ protocol CleanupExecuting: Sendable {
 protocol SimulatorControlling: Sendable {
     func inventory() async throws -> SimulatorInventory
     func deleteDevice(id: String) async throws
-}
-
-protocol PurchaseClient: Sendable {
-    func loadLifetimeProduct() async throws -> PurchaseProduct
-    func purchaseLifetime() async throws -> PurchaseOutcome
-    func restore() async throws
-    func currentEntitlement() async -> ProEntitlementState
 }
 

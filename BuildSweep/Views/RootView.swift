@@ -34,12 +34,8 @@ struct RootView: View {
                     .buildSweepAppearance()
             }
         }
-        .sheet(isPresented: $model.showingPaywall) {
-            PaywallView(model: model)
-                .buildSweepAppearance()
-        }
         .sheet(item: $model.latestCleanupResult) { result in
-            CleanupResultView(model: model, result: result)
+            CleanupResultView(result: result)
                 .buildSweepAppearance()
         }
         .alert("BuildSweep", isPresented: Binding(
@@ -107,7 +103,7 @@ private struct SidebarView: View {
         .listStyle(.sidebar)
         .navigationTitle("BuildSweep")
         .safeAreaInset(edge: .bottom, spacing: 0) {
-            SidebarProCallout(model: model)
+            SidebarSafetyCallout()
                 .padding(12)
         }
     }
@@ -119,52 +115,24 @@ private struct SidebarView: View {
     }
 }
 
-private struct SidebarProCallout: View {
-    @Bindable var model: AppModel
-
+private struct SidebarSafetyCallout: View {
     var body: some View {
-        VStack(alignment: .leading, spacing: 12) {
-            HStack(alignment: .top, spacing: 10) {
-                IconTile(
-                    systemImage: model.isPro ? "checkmark.seal.fill" : "infinity.circle.fill",
-                    size: 32
-                )
-                VStack(alignment: .leading, spacing: 3) {
-                    Text(title)
-                        .font(.headline)
-                        .fixedSize(horizontal: false, vertical: true)
-                    Text(detail)
-                        .font(.caption)
-                        .foregroundStyle(.secondary)
-                        .fixedSize(horizontal: false, vertical: true)
-                }
-            }
-            if !model.isPro {
-                Button {
-                    model.showingPaywall = true
-                } label: {
-                    Text("View BuildSweep Pro")
-                        .frame(maxWidth: .infinity)
-                }
-                .buttonStyle(.borderedProminent)
-                .controlSize(.regular)
+        HStack(alignment: .top, spacing: 10) {
+            IconTile(systemImage: "trash", size: 32)
+            VStack(alignment: .leading, spacing: 3) {
+                Text("Cleanup is free")
+                    .font(.headline)
+                    .fixedSize(horizontal: false, vertical: true)
+                Text("Selected items move to Trash and can be restored from Finder.")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+                    .fixedSize(horizontal: false, vertical: true)
             }
         }
         .padding(12)
         .frame(maxWidth: .infinity, alignment: .leading)
         .surfaceCard(emphasized: true)
         .accessibilityElement(children: .combine)
-    }
-
-    private var title: String {
-        if model.isPro { return "BuildSweep Pro unlocked" }
-        if model.freeCleanupConsumed { return "Unlock unlimited cleanup" }
-        return "\(model.remainingFreeCleanups) of \(FreeCleanupPolicy.limit) free cleanups left"
-    }
-
-    private var detail: String {
-        if model.isPro { return "Unlimited cleanup on this Apple ID." }
-        return "Scans stay free. Pro is one lifetime purchase."
     }
 }
 

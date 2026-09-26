@@ -1,4 +1,3 @@
-import StoreKit
 import SwiftUI
 
 struct CleanupReviewView: View {
@@ -93,7 +92,7 @@ struct CleanupReviewView: View {
                 }
 
                 HStack {
-                    Text(model.isPro ? "BuildSweep Pro" : "Using free cleanup \(min(model.freeCleanupsUsed + 1, FreeCleanupPolicy.limit)) of \(FreeCleanupPolicy.limit)")
+                    Text("Selected files move to Trash.")
                         .font(.callout)
                         .foregroundStyle(.secondary)
                     Spacer()
@@ -154,10 +153,8 @@ struct CleanupReviewView: View {
 }
 
 struct CleanupResultView: View {
-    @Bindable var model: AppModel
     let result: CleanupSessionResult
     @Environment(\.dismiss) private var dismiss
-    @Environment(\.requestReview) private var requestReview
 
     var body: some View {
         ZStack {
@@ -205,9 +202,6 @@ struct CleanupResultView: View {
                 }
 
                 HStack {
-                    if !model.isPro {
-                        Button("View BuildSweep Pro") { model.showingPaywall = true }
-                    }
                     Spacer()
                     Button("Done") { dismiss() }
                         .buttonStyle(.borderedProminent)
@@ -217,12 +211,5 @@ struct CleanupResultView: View {
         }
         .buildSweepAppearance()
         .frame(minWidth: 620, minHeight: 520)
-        .task(id: result.id) {
-            guard model.shouldRequestReview else { return }
-            try? await Task.sleep(for: .seconds(2))
-            guard !Task.isCancelled else { return }
-            model.recordReviewAttempt()
-            requestReview()
-        }
     }
 }

@@ -2,8 +2,6 @@ import SwiftUI
 
 struct SettingsView: View {
     @Bindable var model: AppModel
-    @Environment(\.openURL) private var openURL
-    @State private var showingPaywall = false
 
     var body: some View {
         TabView {
@@ -14,24 +12,6 @@ struct SettingsView: View {
                         set: { model.setLaunchAtLogin($0) }
                     ))
                     Text("BuildSweep does not schedule periodic cleanup or run a background helper.")
-                        .font(.caption)
-                        .foregroundStyle(.secondary)
-                }
-                Section("BuildSweep Pro") {
-                    LabeledContent("Status", value: proStatus)
-                    if !model.isPro {
-                        Button("View BuildSweep Pro") { showingPaywall = true }
-                    }
-                    Button("Restore Purchases") { Task { await model.restorePurchases() } }
-                }
-                Section("Rate BuildSweep") {
-                    Button("Rate BuildSweep") {
-                        if let url = BuildSweepProducts.writeReviewURL {
-                            openURL(url)
-                        }
-                    }
-                    .disabled(BuildSweepProducts.writeReviewURL == nil)
-                    Text("Opens the App Store review page. You can rate anytime.")
                         .font(.caption)
                         .foregroundStyle(.secondary)
                 }
@@ -82,7 +62,7 @@ struct SettingsView: View {
                 }
                 Section("Local data") {
                     Button("Clear Cleanup History", role: .destructive) { Task { await model.clearHistory() } }
-                    Text("Bookmarks, preferences, purchase entitlement cache, the free-use marker, and cleanup history stay on this Mac.")
+                    Text("Bookmarks, preferences, and cleanup history stay on this Mac.")
                         .font(.caption)
                         .foregroundStyle(.secondary)
                 }
@@ -117,19 +97,6 @@ struct SettingsView: View {
         .frame(width: 590, height: 560)
         .scenePadding()
         .buildSweepAppearance()
-        .sheet(isPresented: $showingPaywall) {
-            PaywallView(model: model)
-                .buildSweepAppearance()
-        }
-    }
-
-    private var proStatus: String {
-        if model.isPro { return "Lifetime Pro" }
-        if model.freeCleanupConsumed { return "Free cleanups used" }
-        if model.remainingFreeCleanups == FreeCleanupPolicy.limit {
-            return "\(FreeCleanupPolicy.limit) free cleanups available"
-        }
-        return "\(model.remainingFreeCleanups) free cleanups left"
     }
 
     private func mailURL(subject: String) -> URL {

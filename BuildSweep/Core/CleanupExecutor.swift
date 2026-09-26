@@ -15,29 +15,25 @@ actor DefaultCleanupExecutor: CleanupExecuting {
     private let policy: CleanupPathPolicy
     private let trashRouter: TrashRouting
     private let simulatorController: SimulatorControlling
-    private let freeCleanupStore: FreeCleanupAccounting
 
     init(
         policy: CleanupPathPolicy = CleanupPathPolicy(),
         trashRouter: TrashRouting = SystemTrashRouter(),
-        simulatorController: SimulatorControlling = SimctlController(),
-        freeCleanupStore: FreeCleanupAccounting = KeychainFreeCleanupStore()
+        simulatorController: SimulatorControlling = SimctlController()
     ) {
         self.policy = policy
         self.trashRouter = trashRouter
         self.simulatorController = simulatorController
-        self.freeCleanupStore = freeCleanupStore
     }
 
     func execute(_ plan: CleanupPlan) async -> CleanupSessionResult {
         let started = Date()
         var results: [CleanupItemResult] = []
-        var freeMarkerRecorded = false
 
         for planned in plan.items {
             if Task.isCancelled { break }
             do {
-                var successMessage: String
+                let successMessage: String
                 switch planned.item.action {
                 case .trash:
                     let didAccess = planned.authorizedRoot.startAccessingSecurityScopedResource()
@@ -53,15 +49,6 @@ actor DefaultCleanupExecutor: CleanupExecuting {
                     successMessage = "Deleted permanently"
                 case .inspectionOnly:
                     throw CleanupPolicyError.inspectionOnly(planned.item.displayName)
-                }
-
-                if !freeMarkerRecorded {
-                    do {
-                        try await freeCleanupStore.recordUse()
-                        freeMarkerRecorded = true
-                    } catch {
-                        successMessage += "; free-use marker needs attention: \(error.localizedDescription)"
-                    }
                 }
                 results.append(CleanupItemResult(itemID: planned.item.id, displayName: planned.item.displayName, size: planned.item.size, succeeded: true, message: successMessage))
             } catch {

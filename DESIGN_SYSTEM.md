@@ -9,7 +9,7 @@ Content areas use a near-white canvas and matte cards. Native sidebar materials,
 Semantic sRGB colors live on `BuildSweepTheme`:
 
 - Canvas `#F7F9FC` for main content backgrounds (`AppBackground`).
-- Surface `#FFFFFF` for standard cards; emphasized surface `#EAF3FF` for highlighted metrics and the sidebar Pro callout.
+- Surface `#FFFFFF` for standard cards; emphasized surface `#EAF3FF` for highlighted metrics and the sidebar safety callout.
 - Border `#DCE5EF` and stronger border `#B8C9DD` for decorative card edges. Increase Contrast uses semantic primary strokes instead.
 - Accent `#356DB3` for interactive controls, links, progress, and highlighted numbers.
 - Accent soft `#DCEBFF` for decorative highlights and pale icon-tile backdrops.

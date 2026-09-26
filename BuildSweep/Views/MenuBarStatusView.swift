@@ -21,14 +21,6 @@ struct MenuBarStatusView: View {
                 get: { model.launchAtLogin },
                 set: { model.setLaunchAtLogin($0) }
             ))
-            if model.freeCleanupConsumed && !model.isPro {
-                Divider()
-                Button("Unlock Pro") {
-                    openWindow(id: "main")
-                    NSApp.activate(ignoringOtherApps: true)
-                    model.showingPaywall = true
-                }
-            }
             Divider()
             Button("Quit BuildSweep") { NSApplication.shared.terminate(nil) }
         }

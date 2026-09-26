@@ -19,27 +19,19 @@ final class AppModel {
     var selectedItemIDs: Set<String> = []
     var searchText = ""
     var showingCleanupReview = false
-    var showingPaywall = false
     var preservedPlan: CleanupPlan?
     var latestCleanupResult: CleanupSessionResult?
     var history: [CleanupSessionResult] = []
-    var entitlement: ProEntitlementState = .unknown
-    var freeCleanupsUsed = 0
-    var purchaseProduct: PurchaseProduct?
-    var purchaseMessage: String?
     var appMessage: String?
     var launchAtLogin = false
     var onboardingCompleted = false
     var isBootstrapped = false
 
     private let authorizer: FolderAccessAuthorizer
-    private let purchaseClient: StoreKitPurchaseClient
     private let planner: CleanupPlanning
     private let executor: CleanupExecuting
-    private let freeCleanupStore: FreeCleanupAccounting
     private let historyStore: CleanupHistoryStore
     private let scanCache: ScanCacheStore
-    private let reviewMetrics: ReviewMetricsStore
     private let loginService: LaunchAtLoginService
     private let defaults: UserDefaults
     private let onboardingKey = "onboardingCompleted.v1"
@@ -47,25 +39,19 @@ final class AppModel {
 
     init(
         authorizer: FolderAccessAuthorizer? = nil,
-        purchaseClient: StoreKitPurchaseClient = StoreKitPurchaseClient(),
         planner: CleanupPlanning = DefaultCleanupPlanner(),
-        freeCleanupStore: FreeCleanupAccounting = KeychainFreeCleanupStore(),
         historyStore: CleanupHistoryStore = CleanupHistoryStore(),
         scanCache: ScanCacheStore = ScanCacheStore(),
-        reviewMetrics: ReviewMetricsStore? = nil,
         loginService: LaunchAtLoginService? = nil,
         defaults: UserDefaults = .standard
     ) {
         self.authorizer = authorizer ?? FolderAccessAuthorizer()
-        self.purchaseClient = purchaseClient
         self.planner = planner
-        self.freeCleanupStore = freeCleanupStore
         self.historyStore = historyStore
         self.scanCache = scanCache
-        self.reviewMetrics = reviewMetrics ?? ReviewMetricsStore()
         self.loginService = loginService ?? LaunchAtLoginService()
         self.defaults = defaults
-        self.executor = DefaultCleanupExecutor(freeCleanupStore: freeCleanupStore)
+        self.executor = DefaultCleanupExecutor()
     }
 
     var developerRoot: AuthorizedRoot? { authorizedRoots.first { $0.kind == .developerDirectory } }
@@ -73,10 +59,6 @@ final class AppModel {
     var xcodeAuthorizedRoots: [AuthorizedRoot] { authorizedRoots.filter { !$0.kind.isAI } }
     var hasAnyAIRoot: Bool { authorizedRoots.contains { $0.kind.isAI } }
     var needsOnboarding: Bool { developerRoot == nil || !onboardingCompleted }
-    var isPro: Bool { entitlement == .pro }
-    var freeCleanupConsumed: Bool { freeCleanupsUsed >= FreeCleanupPolicy.limit }
-    var remainingFreeCleanups: Int { max(0, FreeCleanupPolicy.limit - freeCleanupsUsed) }
-    var canUseCleanup: Bool { isPro || remainingFreeCleanups > 0 }
     var selectedItems: [StorageItem] { snapshot.allItems.filter { selectedItemIDs.contains($0.id) } }
     var selectedSize: Int64 { selectedItems.reduce(0) { $0 + $1.size } }
     var xcodeIsRunning: Bool {
@@ -102,10 +84,7 @@ final class AppModel {
     func bootstrap() async {
         guard !isBootstrapped else { return }
         isBootstrapped = true
-        reviewMetrics.recordLaunch()
         authorizedRoots = await authorizer.restoreAuthorizedRoots()
-        entitlement = await purchaseClient.currentEntitlement()
-        freeCleanupsUsed = await freeCleanupStore.usedCount()
         history = await historyStore.load()
         launchAtLogin = loginService.isEnabled
         onboardingCompleted = defaults.bool(forKey: onboardingKey)
@@ -117,13 +96,6 @@ final class AppModel {
         if developerRoot != nil, snapshot.categories.isEmpty {
             startScan()
         }
-
-        Task { [weak self, purchaseClient] in
-            await purchaseClient.observeTransactionUpdates { state in
-                await MainActor.run { self?.entitlement = state }
-            }
-        }
-        Task { await loadProduct() }
     }
 
     func grantDeveloperAccess() async {
@@ -300,11 +272,7 @@ final class AppModel {
                 roots: authorizedRoots
             )
             preservedPlan = plan
-            if freeCleanupConsumed && !isPro {
-                showingPaywall = true
-            } else {
-                showingCleanupReview = true
-            }
+            showingCleanupReview = true
         } catch {
             appMessage = error.localizedDescription
         }
@@ -339,47 +307,10 @@ final class AppModel {
         await historyStore.append(result)
         history = await historyStore.load()
         if result.hadAnySuccess {
-            freeCleanupsUsed = await freeCleanupStore.usedCount()
-            reviewMetrics.recordSuccessfulCleanup(bytes: result.recoveredSize)
             selectedItemIDs.subtract(result.succeededItems.map(\.itemID))
         }
         preservedPlan = nil
         startScan()
-    }
-
-    func loadProduct() async {
-        do { purchaseProduct = try await purchaseClient.loadLifetimeProduct() }
-        catch { purchaseMessage = error.localizedDescription }
-    }
-
-    func purchasePro() async {
-        purchaseMessage = nil
-        do {
-            switch try await purchaseClient.purchaseLifetime() {
-            case .purchased:
-                entitlement = .pro
-                showingPaywall = false
-                purchaseMessage = "BuildSweep Pro is unlocked. Review your preserved cleanup plan when you are ready."
-                if preservedPlan != nil { showingCleanupReview = true }
-            case .pending:
-                purchaseMessage = "The purchase is pending approval."
-            case .cancelled:
-                purchaseMessage = nil
-            }
-        } catch {
-            purchaseMessage = error.localizedDescription
-        }
-    }
-
-    func restorePurchases() async {
-        purchaseMessage = nil
-        do {
-            try await purchaseClient.restore()
-            entitlement = await purchaseClient.currentEntitlement()
-            purchaseMessage = entitlement == .pro ? "BuildSweep Pro was restored." : "No active BuildSweep Pro purchase was found."
-        } catch {
-            purchaseMessage = error.localizedDescription
-        }
     }
 
     func clearHistory() async {
@@ -434,17 +365,6 @@ final class AppModel {
     func openXcodeComponents() {
         guard let xcodeURL = NSWorkspace.shared.urlForApplication(withBundleIdentifier: "com.apple.dt.Xcode") else { return }
         NSWorkspace.shared.open(xcodeURL)
-    }
-
-    var shouldRequestReview: Bool {
-        let version = Bundle.main.object(forInfoDictionaryKey: "CFBundleShortVersionString") as? String ?? "1.0"
-        return latestCleanupResult?.failedItems.isEmpty == true
-            && ReviewPromptPolicy.isEligible(state: reviewMetrics.state, version: version, adjacentPaywall: !isPro)
-    }
-
-    func recordReviewAttempt() {
-        let version = Bundle.main.object(forInfoDictionaryKey: "CFBundleShortVersionString") as? String ?? "1.0"
-        reviewMetrics.recordAttempt(version: version)
     }
 
     private func rootURL(for kind: AuthorizedRootKind) -> URL? {

@@ -1,6 +1,6 @@
 # BuildSweep
 
-BuildSweep is a native macOS 14+ utility that explains and cleans Xcode-generated storage without reading source contents. It uses SwiftUI, StoreKit 2, App Sandbox security-scoped bookmarks, Keychain, ServiceManagement, OS frameworks only, and no external package or service.
+BuildSweep is a free native macOS 14+ utility that explains and cleans Xcode-generated storage without reading source contents. It uses SwiftUI, App Sandbox security-scoped bookmarks, ServiceManagement, OS frameworks only, and no external package or service. Direct downloads do not include in-app purchases.
 
 ## Open and run
 
@@ -15,17 +15,15 @@ From Codex or Terminal:
 ./script/test.sh
 ```
 
-The Run script builds into project-local `DerivedData`. Its default local build disables signing for repeatable compilation. Use an automatically signed Xcode build or archive for security-scoped bookmark, App Sandbox, StoreKit sandbox, and Simulator feasibility QA.
+The Run script builds into project-local `DerivedData`. Its default local build disables signing for repeatable compilation. Use an automatically signed Xcode build or archive for security-scoped bookmark, App Sandbox, and Simulator feasibility QA.
 
 ## Production identifiers
 
 - Bundle identifier: `com.ayush.buildsweep`
-- Non-consumable IAP: `com.ayush.buildsweep.pro.lifetime`
-- Keychain free-use service: `com.ayush.buildsweep.free-cleanup`
 - Website: `https://buildsweep.ayushdev.com`
 - Support: `support@ayushdev.com`
 
-No `.storekit` configuration is included. Create the production IAP in App Store Connect, then test that real product in Apple’s sandbox.
+The app is free. It does not use StoreKit, a paywall, or a license key.
 
 ## Safety model
 
