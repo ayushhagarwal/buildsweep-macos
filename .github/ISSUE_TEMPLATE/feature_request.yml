@@ -1,0 +1,25 @@
+name: Feature request
+description: A storage problem BuildSweep should explain or clean.
+title: "[Feature] "
+body:
+  - type: textarea
+    id: problem
+    attributes:
+      label: Problem
+      description: Which generated files are involved, and why the current categories are not enough.
+    validations:
+      required: true
+  - type: textarea
+    id: proposal
+    attributes:
+      label: Proposed behavior
+      description: What the app should show or move to Trash, and which folder the user would authorize.
+    validations:
+      required: true
+  - type: textarea
+    id: safety
+    attributes:
+      label: Safety
+      description: Confirm the idea does not read source contents, chats, or credentials, and does not delete outside an authorized root.
+    validations:
+      required: true

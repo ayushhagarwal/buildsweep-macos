@@ -1,0 +1,46 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  unit-tests:
+    name: Unit tests (${{ matrix.os }})
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: macos-26
+            developer_dir: /Applications/Xcode.app
+          - os: macos-15
+            developer_dir: /Applications/Xcode_26.3.app
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Select Xcode
+        run: |
+          if [[ ! -d "${{ matrix.developer_dir }}" ]]; then
+            echo "Missing ${{ matrix.developer_dir }}"
+            ls /Applications | grep -i Xcode || true
+            exit 1
+          fi
+          sudo xcode-select -s "${{ matrix.developer_dir }}"
+          xcodebuild -version
+
+      - name: Unit tests
+        run: |
+          xcodebuild \
+            -project BuildSweep.xcodeproj \
+            -scheme BuildSweep \
+            -configuration Debug \
+            -derivedDataPath DerivedData \
+            -destination "platform=macOS" \
+            -only-testing:BuildSweepTests \
+            CODE_SIGNING_ALLOWED=NO \
+            test

@@ -1,0 +1,47 @@
+name: Bug report
+description: A defect in scanning, cleanup, or the app UI.
+title: "[Bug] "
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Leave out source trees, credentials, and chat history. For a security vulnerability, use private reporting in SECURITY.md instead of this form.
+  - type: input
+    id: macos
+    attributes:
+      label: macOS version
+      placeholder: 26.6
+    validations:
+      required: true
+  - type: input
+    id: app_version
+    attributes:
+      label: BuildSweep version
+      description: The version from the app or from the disk image name.
+      placeholder: 1.0.0 (1)
+    validations:
+      required: true
+  - type: dropdown
+    id: xcode_state
+    attributes:
+      label: Was Xcode running?
+      options:
+        - "Yes"
+        - "No"
+        - "Not sure"
+    validations:
+      required: true
+  - type: textarea
+    id: what_happened
+    attributes:
+      label: What happened
+      description: What you selected, what you expected, and what the app did.
+    validations:
+      required: true
+  - type: textarea
+    id: steps
+    attributes:
+      label: Steps
+      description: Use a synthetic folder when you can. Omit private paths.
+    validations:
+      required: true
