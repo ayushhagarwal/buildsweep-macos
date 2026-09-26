@@ -2,6 +2,37 @@ import AppKit
 import Foundation
 import Observation
 
+enum CleanupPreset: String, CaseIterable, Identifiable {
+    case xcodeRebuildable
+    case packageManagerDownloads
+
+    var id: String { rawValue }
+
+    var title: String {
+        switch self {
+        case .xcodeRebuildable: "Review Xcode Rebuildable Caches"
+        case .packageManagerDownloads: "Review Package Manager Caches"
+        }
+    }
+
+    var explanation: String {
+        switch self {
+        case .xcodeRebuildable: "Derived Data and compiler caches; Xcode may take longer to rebuild afterward."
+        case .packageManagerDownloads: "Individually approved Swift, CocoaPods, Carthage, npm, Yarn, pnpm, and Bun caches; packages may need to download or rebuild again."
+        }
+    }
+
+    func includes(_ item: StorageItem) -> Bool {
+        guard item.action == .trash else { return false }
+        switch self {
+        case .xcodeRebuildable:
+            return item.kind == .derivedData || item.kind == .compilerCache
+        case .packageManagerDownloads:
+            return item.kind == .packageManagerCache
+        }
+    }
+}
+
 @MainActor
 @Observable
 final class AppModel {
@@ -329,6 +360,16 @@ final class AppModel {
         } catch {
             appMessage = error.localizedDescription
         }
+    }
+
+    func prepareCleanup(preset: CleanupPreset) {
+        let items = snapshot.allItems.filter(preset.includes)
+        guard !items.isEmpty else {
+            appMessage = "No eligible items are available for ‘\(preset.title)’. Scan storage and grant access to the locations you want included."
+            return
+        }
+        selectedItemIDs = Set(items.map(\.id))
+        prepareCleanup()
     }
 
     func executePreservedCleanup() async {

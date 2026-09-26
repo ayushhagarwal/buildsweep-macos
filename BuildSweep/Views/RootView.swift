@@ -24,6 +24,21 @@ struct RootView: View {
                         }
                         .disabled(model.snapshot.allItems.allSatisfy { $0.kind != .derivedData && $0.kind != .compilerCache })
                         .help("Select only rebuildable Xcode Derived Data and compiler caches.")
+                        Menu {
+                            ForEach(CleanupPreset.allCases) { preset in
+                                Button {
+                                    model.prepareCleanup(preset: preset)
+                                } label: {
+                                    VStack(alignment: .leading) {
+                                        Text(preset.title)
+                                        Text(preset.explanation)
+                                    }
+                                }
+                            }
+                        } label: {
+                            Label("Cleanup Presets", systemImage: "checklist")
+                        }
+                        .help("Choose a preset to select eligible items and inspect every path before confirmation.")
                         Button {
                             model.prepareCleanup()
                         } label: {
