@@ -11,10 +11,10 @@ Supported systems for a release candidate:
 
 ## Automated
 
-- [ ] Project-local clean Release build passes for `arm64` and `x86_64`.
-- [ ] Unit tests pass on the macOS version used to cut the release.
+- [x] Project-local clean Release build passes for `arm64` and `x86_64`.
+- [x] Unit tests pass on the macOS version used to cut the release.
 - [ ] UI launch test passes from the signed release candidate, not from an older local build.
-- [ ] No external package, network entitlement, helper, or service is present.
+- [x] No external package, network entitlement, helper, or service is present.
 
 ## Safety
 
@@ -28,7 +28,7 @@ Supported systems for a release candidate:
 ## Platform and accessibility
 
 - [ ] Exercise the candidate on each macOS major version you claim (14, 15, and 26). Record the versions you could not run.
-- [ ] Confirm the shipped binary contains both `arm64` and `x86_64`.
+- [x] Confirm the shipped binary contains both `arm64` and `x86_64`.
 - [ ] Light appearance, Increased Contrast, Reduce Motion, VoiceOver, and keyboard-only use.
 - [ ] Minimum window, fullscreen, and multiple displays.
 - [ ] Xcode stable, Xcode beta, Xcode running, no Xcode, and misconfigured command-line tools.
@@ -47,6 +47,6 @@ Direct distribution needs a Developer ID Application signature and Apple notariz
 
 ## Trust
 
-- [ ] Review the privacy manifest in `BuildSweep/PrivacyInfo.xcprivacy`.
+- [x] Review the privacy manifest in `BuildSweep/PrivacyInfo.xcprivacy`.
 - [ ] Privacy and support pages are live at the production domain, or the README states that they are not yet live.
 - [ ] The disk image and tag contain no credentials, provisioning profiles, or private notes.

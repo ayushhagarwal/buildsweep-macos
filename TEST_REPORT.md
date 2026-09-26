@@ -1,18 +1,42 @@
 # Test report
 
-Current automated coverage includes 18 focused unit tests plus one macOS UI launch test:
+This report replaces the 2026-08-08 note. That earlier run is not verification of the 1.0.0 disk image.
 
-- canonical path containment, broad-root blocking, source-path blocking, and symlink escape;
-- Derived Data workspace metadata and default-selection behavior;
-- archive version/build/bundle/signing/dSYM parsing and Important risk behavior;
-- cleanup partial success and immediate free-session consumption;
-- successful Trash reporting when Keychain accounting itself needs attention;
-- exact Device Support and optional Xcode-cache allowlists with unknown-item fail-closed behavior;
-- allocated sizing of hidden files and package contents;
-- inspection-only planning rejection;
-- review milestone, version, and cooldown policy;
-- verified, pending, revoked, unavailable, unverified, and restore-without-entitlement purchase states.
+Evidence below is from 2026-09-26 on this Mac only:
 
-Run on 2026-08-08 using Xcode 26.6 and the macOS destination. All 18 unit tests and the UI launch test passed. The universal Release artifact also built for arm64 and x86_64, then passed local ad-hoc `codesign --verify --deep --strict` verification with only the two intended sandbox entitlements.
+- Machine: MacBook Air, Apple silicon
+- macOS 27.2 (build 26B5086k)
+- Xcode 27A266a
+- Candidate: `dist/BuildSweep-1.0.0.dmg` and the Release app inside it
+- App version: 1.0.0 (build 1)
+- Minimum system version in the built app: 14.0
+- Slices: `arm64` and `x86_64` (`lipo -archs`)
 
-The UI launch target must still be rerun from the uploaded TestFlight candidate. Destructive Trash and Simulator QA are intentionally manual and gated by `SANDBOX_FEASIBILITY.md`.
+The disk image was built with `ALLOW_UNSIGNED=1 ./script/package_dmg.sh` because no Developer ID Application certificate was available. It is not notarized. `codesign --verify --deep --strict --verbose=2 dist/BuildSweep.app` reported `code object is not signed at all`. `codesign -dvvv` shows an ad-hoc linker signature, no team, and no sealed resources. Gatekeeper acceptance was not tested and should not be assumed.
+
+## What passed
+
+- Universal Release build for `arm64` and `x86_64` succeeded.
+- Unit tests: 21 tests, 0 failures, on macOS 27.2 (`BuildSweepTests` via `xcodebuild test`, signing disabled). Coverage still includes path containment, symlink escape, Derived Data and archive metadata, inspection-only rejection, allocated sizing, and allowlisted AI-tool folders. Purchase-state tests are gone with StoreKit.
+- One synthetic fixture file was moved to Trash with `FileManager.trashItem` and moved back. The original contents were still readable. This was not a run of the app's cleanup flow, and it did not cover Derived Data, archives, device support, or Simulator devices.
+- Source review: no Swift package dependencies. `BuildSweep/BuildSweep.entitlements` contains only App Sandbox and user-selected read/write access. Those entitlements are not sealed into the unsigned candidate.
+- `BuildSweep/PrivacyInfo.xcprivacy` declares no tracking and no collected data types. Accessed API reasons are UserDefaults `CA92.1`, file timestamp `3B52.1`, and disk space `85F4.1`.
+- Opening the unsigned Release app with `open -n` left the `BuildSweep` process running. Window contents were not inspected.
+
+## What did not pass
+
+- `BuildSweepUITests.testLaunchShowsOnboardingOrOverview` failed on an ad-hoc signed debug build. The test launched the app (pid recorded by XCTest) and did not find "Understand Xcode storage" or "Xcode storage at a glance" within the timeout. Result bundle: `DerivedData/Logs/Test/Test-BuildSweep-2026.09.26_19-13-51-+0530.xcresult`.
+- The same UI test, with signing disabled, was killed before it connected (`signal kill`). That run is not a UI result.
+
+## Not run
+
+- macOS 14, macOS 15, and any macOS 26 build other than 27.2 on this Mac.
+- Execution of the `x86_64` slice.
+- VoiceOver, Increased Contrast, Reduce Motion, keyboard-only, fullscreen, and multiple displays.
+- Xcode-running guards, corrupt plists, cancellation, and partial success through the app UI.
+- Disposable-user cleanup of real Xcode folders.
+- `SANDBOX_FEASIBILITY.md` Simulator deletion checks.
+- Developer ID signing, notarization, stapling, and `spctl` assessment.
+- A check that the production website and support pages are live.
+
+Do not treat this file as a passing release sign-off. The public download still needs a Developer ID-signed, notarized disk image and the unchecked items in `RELEASE_CHECKLIST.md`.
