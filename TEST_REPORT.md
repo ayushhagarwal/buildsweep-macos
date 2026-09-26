@@ -23,6 +23,10 @@ The disk image was built with `ALLOW_UNSIGNED=1 ./script/package_dmg.sh` because
 - `BuildSweep/PrivacyInfo.xcprivacy` declares no tracking and no collected data types. Accessed API reasons are UserDefaults `CA92.1`, file timestamp `3B52.1`, and disk space `85F4.1`.
 - Opening the unsigned Release app with `open -n` left the `BuildSweep` process running. Window contents were not inspected.
 
+## Continuous integration
+
+After commit `7374407`, GitHub Actions run [36252823705](https://github.com/ayushhagarwal/buildsweep-macos/actions/runs/36252823705) passed all unit tests on `macos-15` and `macos-26`. This CI job runs `BuildSweepTests` only; it does not run the UI launch test or validate a signed app.
+
 ## What did not pass
 
 - `BuildSweepUITests.testLaunchShowsOnboardingOrOverview` still fails on this machine. An ad-hoc signed debug run connected, but the accessibility hierarchy contained the app/menu bar and no visible main window, so neither expected screen label was found. Result bundle: `/tmp/BuildSweepUIUnderUser/Logs/Test/Test-BuildSweep-2026.09.26_20-39-21-+0530.xcresult`.
@@ -31,7 +35,7 @@ The disk image was built with `ALLOW_UNSIGNED=1 ./script/package_dmg.sh` because
 
 ## Not run
 
-- macOS 14, macOS 15, and any macOS 26 build other than 27.2 on this Mac.
+- macOS 14 runtime behavior. macOS 15 and macOS 26 have unit-test CI coverage, but no signed Release app or GUI validation on those systems.
 - Execution of the `x86_64` slice.
 - VoiceOver, Increased Contrast, Reduce Motion, keyboard-only, fullscreen, and multiple displays.
 - Xcode-running guards, corrupt plists, cancellation, and partial success through the app UI.
