@@ -71,6 +71,12 @@ struct CategoryView: View {
             }
 
             if category == .simulators {
+                Label("Inspection only · device deletion stays disabled until signed-build safety validation is complete. Device folder sizes are allocated-space estimates; runtime storage is managed by Xcode.", systemImage: "eye")
+                    .font(.callout)
+                    .foregroundStyle(.secondary)
+                    .padding(12)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                    .surfaceCard(cornerRadius: 12)
                 Button("Open Xcode Components") { model.openXcodeComponents() }
                     .buttonStyle(.link)
             }
@@ -182,21 +188,26 @@ private struct StorageItemRow: View {
 
                 VStack(alignment: .leading, spacing: 3) {
                     Text(item.displayName).fontWeight(.semibold).lineLimit(1)
-                    Text(item.url?.path(percentEncoded: false) ?? item.metadata["Runtime"] ?? "Managed by Xcode")
+                    Text(rowSubtitle)
                         .font(.caption)
                         .foregroundStyle(.secondary)
                         .lineLimit(1)
                 }
                 Spacer()
                 VStack(alignment: .trailing, spacing: 2) {
-                    Text(dateLabel).font(.caption2).foregroundStyle(.tertiary)
-                    Text(BuildSweepFormatters.date(item.lastUsedAt ?? item.modifiedAt))
+                    Text(item.kind == .simulatorDevice ? "Device state" : item.kind == .simulatorRuntime ? "Runtime status" : dateLabel)
+                        .font(.caption2).foregroundStyle(.tertiary)
+                    Text(item.kind == .simulatorDevice
+                         ? item.metadata["State"] ?? "Unknown"
+                         : item.kind == .simulatorRuntime
+                            ? item.metadata["Availability"] ?? "Unknown"
+                            : BuildSweepFormatters.date(item.lastUsedAt ?? item.modifiedAt))
                         .font(.caption).foregroundStyle(.secondary)
                 }
                 .frame(width: 120, alignment: .trailing)
                 RiskBadge(risk: item.risk)
                     .frame(width: 110)
-                Text(BuildSweepFormatters.bytes(item.size))
+                Text(item.kind == .simulatorRuntime ? "Xcode managed" : BuildSweepFormatters.bytes(item.size))
                     .font(.callout.weight(.semibold))
                     .monospacedDigit()
                     .frame(width: 90, alignment: .trailing)
@@ -265,6 +276,17 @@ private struct StorageItemRow: View {
                 StorageInspectionBrowser(url: url, title: root.displayName)
                     .frame(minWidth: 620, minHeight: 480)
             }
+        }
+    }
+
+    private var rowSubtitle: String {
+        switch item.kind {
+        case .simulatorDevice:
+            return "\(item.metadata["Runtime"] ?? "Runtime unknown") · \(item.metadata["Availability"] ?? "Availability unknown") · \(item.url?.path(percentEncoded: false) ?? "Data path unavailable")"
+        case .simulatorRuntime:
+            return "\(item.metadata["Version"] ?? "Version unknown") · \(item.metadata["Devices"] ?? "Device count unavailable")"
+        default:
+            return item.url?.path(percentEncoded: false) ?? item.metadata["Runtime"] ?? "Managed by Xcode"
         }
     }
 

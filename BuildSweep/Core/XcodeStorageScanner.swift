@@ -198,11 +198,19 @@ actor XcodeStorageScanner: StorageScanner {
                     size: device.size,
                     risk: .reviewFirst,
                     action: inventory.deletionIsAvailable ? .permanentSimulatorDeletion : .inspectionOnly,
-                    metadata: ["Runtime": device.runtime, "State": device.state]
+                    metadata: [
+                        "Runtime": device.runtime,
+                        "State": device.state,
+                        "Availability": device.isAvailable ? "Available" : "Unavailable",
+                        "Device ID": device.id,
+                        "Data folder": device.dataPath?.path(percentEncoded: false) ?? "Not reported by simctl",
+                        "Storage measurement": device.dataPath == nil ? "Unavailable" : "Allocated file space; estimate"
+                    ]
                 )
             }
             items += inventory.runtimes.map { runtime in
-                StorageItem(
+                let deviceCount = inventory.devices.filter { $0.runtime == runtime.id }.count
+                return StorageItem(
                     id: runtime.id,
                     category: .simulators,
                     kind: .simulatorRuntime,
@@ -211,7 +219,13 @@ actor XcodeStorageScanner: StorageScanner {
                     size: 0,
                     risk: .inspectionOnly,
                     action: .inspectionOnly,
-                    metadata: ["Version": runtime.version, "Management": "Open Xcode Settings › Components"]
+                    metadata: [
+                        "Version": runtime.version,
+                        "Availability": runtime.isAvailable ? "Installed and available" : "Unavailable",
+                        "Devices": "\(deviceCount) simulator device(s)",
+                        "Storage": "Runtime size is managed by Xcode and is not measured by BuildSweep",
+                        "Management": "Open Xcode Settings › Components"
+                    ]
                 )
             }
             return StorageCategorySnapshot(category: category, items: items, scannedAt: .now, warnings: inventory.limitation.map { [$0] } ?? [], status: inventory.limitation == nil ? .complete : .partial)
