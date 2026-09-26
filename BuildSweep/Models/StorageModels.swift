@@ -356,6 +356,7 @@ struct CleanupPlanItem: Identifiable, Codable, Hashable, Sendable {
     let item: StorageItem
     let authorizedRoot: URL
     let canonicalURLAtPlanning: URL?
+    let targetIdentity: PlannedTargetIdentity?
 }
 
 struct CleanupPlan: Identifiable, Codable, Hashable, Sendable {
@@ -429,7 +430,18 @@ protocol AccessAuthorizing {
 }
 
 protocol CleanupPlanning: Sendable {
-    func makePlan(from selection: CleanupSelection, snapshot: ScanSnapshot, roots: [AuthorizedRoot]) throws -> CleanupPlan
+    func makePlan(
+        from selection: CleanupSelection,
+        snapshot: ScanSnapshot,
+        roots: [AuthorizedRoot],
+        freshSimulatorDeviceIDs: Set<String>
+    ) throws -> CleanupPlan
+}
+
+extension CleanupPlanning {
+    func makePlan(from selection: CleanupSelection, snapshot: ScanSnapshot, roots: [AuthorizedRoot]) throws -> CleanupPlan {
+        try makePlan(from: selection, snapshot: snapshot, roots: roots, freshSimulatorDeviceIDs: [])
+    }
 }
 
 protocol CleanupExecuting: Sendable {

@@ -22,6 +22,20 @@ cleanup() {
 }
 trap cleanup EXIT
 
+LOCAL_ONLY="${ALLOW_UNSIGNED:-}"
+IDENTITY="${CODESIGN_IDENTITY:-}"
+if [[ "$LOCAL_ONLY" != "1" && -z "$IDENTITY" ]]; then
+  IDENTITY="$(security find-identity -v -p codesigning | awk -F '"' '/Developer ID Application/ { print $2; exit }')"
+fi
+
+if [[ "$LOCAL_ONLY" == "1" ]]; then
+  echo "Writing an unsigned local disk image. This is not a public release and will not be notarized."
+elif [[ -z "$IDENTITY" || -z "${NOTARY_KEYCHAIN_PROFILE:-}" ]]; then
+  echo "A public release requires a Developer ID Application certificate and NOTARY_KEYCHAIN_PROFILE." >&2
+  echo "Set ALLOW_UNSIGNED=1 only for a local test image. That image must not be published." >&2
+  exit 1
+fi
+
 echo "Building $APP_NAME $VERSION ($BUILD) for arm64 and x86_64"
 env DEVELOPER_DIR="${DEVELOPER_DIR:-/Applications/Xcode.app/Contents/Developer}" xcodebuild \
   -project "$ROOT_DIR/BuildSweep.xcodeproj" \
@@ -38,22 +52,10 @@ rm -rf "$APP"
 mkdir -p "$DIST"
 ditto "$DERIVED_DATA/Build/Products/Release/$APP_NAME.app" "$APP"
 
-IDENTITY="${CODESIGN_IDENTITY:-}"
-if [[ -z "$IDENTITY" ]]; then
-  IDENTITY="$(security find-identity -v -p codesigning | awk -F '"' '/Developer ID Application/ { print $2; exit }')"
-fi
-
-if [[ -n "$IDENTITY" ]]; then
+if [[ "$LOCAL_ONLY" != "1" ]]; then
   echo "Signing with $IDENTITY"
   codesign --force --options runtime --timestamp --sign "$IDENTITY" --entitlements "$ENTITLEMENTS" "$APP"
   codesign --verify --deep --strict --verbose=2 "$APP"
-else
-  if [[ "${ALLOW_UNSIGNED:-}" != "1" ]]; then
-    echo "No Developer ID Application identity found." >&2
-    echo "Install one, set CODESIGN_IDENTITY, or set ALLOW_UNSIGNED=1 for a local test image." >&2
-    exit 1
-  fi
-  echo "Writing an unsigned local disk image. Gatekeeper will not accept it as a public download."
 fi
 
 cp -R "$APP" "$STAGE/$APP_NAME.app"
@@ -67,17 +69,22 @@ hdiutil create \
   -format UDZO \
   "$DMG"
 
-if [[ -n "$IDENTITY" ]]; then
-  codesign --force --timestamp --sign "$IDENTITY" "$DMG"
+if [[ "$LOCAL_ONLY" == "1" ]]; then
+  echo "Created local test image $DMG"
+  echo "It is not notarized and must not be published."
+  lipo -archs "$APP/Contents/MacOS/$APP_NAME"
+  exit 0
 fi
 
-if [[ -n "${NOTARY_KEYCHAIN_PROFILE:-}" ]]; then
-  echo "Submitting $DMG for notarization"
-  xcrun notarytool submit "$DMG" --keychain-profile "$NOTARY_KEYCHAIN_PROFILE" --wait
-  xcrun stapler staple "$DMG"
-  spctl --assess --type open --context context:primary-signature --verbose=2 "$DMG" || true
-  spctl --assess --type execute --verbose=2 "$APP"
-fi
+codesign --force --timestamp --sign "$IDENTITY" "$DMG"
+echo "Submitting $DMG for notarization"
+xcrun notarytool submit "$DMG" --keychain-profile "$NOTARY_KEYCHAIN_PROFILE" --wait
+xcrun stapler staple "$APP"
+xcrun stapler staple "$DMG"
+xcrun stapler validate "$APP"
+xcrun stapler validate "$DMG"
+spctl --assess --type execute --verbose=2 "$APP"
+spctl --assess --type open --context context:primary-signature --verbose=2 "$DMG"
 
-echo "Created $DMG"
+echo "Created notarized $DMG"
 lipo -archs "$APP/Contents/MacOS/$APP_NAME"

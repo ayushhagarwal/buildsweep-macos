@@ -1,6 +1,6 @@
 # Signed App Sandbox feasibility gate
 
-Simulator deletion is deliberately compiled off in version 1 source (`SimulatorFeaturePolicy.deletionEnabled = false`) until every item below succeeds in a production-style signed build. Do not flip this flag based on an unsandboxed Terminal test.
+Simulator deletion is deliberately compiled off in version 1 source (`SimulatorFeaturePolicy.deletionEnabled = false`) until every item below succeeds in a production-style signed build. Do not flip this flag based on an unsandboxed Terminal test. The planner and `simctl` controller also reject anything other than one device UDID that is present in a fresh inventory, including `all` and `unavailable`. Those checks stay in place when the flag is still false.
 
 ## Test build
 

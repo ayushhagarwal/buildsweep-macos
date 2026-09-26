@@ -34,7 +34,7 @@ Or open `BuildSweep.xcodeproj`, select the `BuildSweep` scheme and `My Mac`, and
 
 The run script writes a Debug build to project-local `DerivedData` and disables signing so compilation does not need a certificate. Bookmark, sandbox, and Simulator checks need an automatically signed Xcode build.
 
-`./script/package_dmg.sh` builds the universal Release app and, when `CODESIGN_IDENTITY` and `NOTARY_KEYCHAIN_PROFILE` are set, signs and notarizes the disk image. Those secrets stay off ordinary CI. See `RELEASE_CHECKLIST.md`.
+`./script/package_dmg.sh` builds the universal Release app. A public disk image is signed with a Developer ID Application certificate, notarized, stapled, and checked with `spctl`. The script fails if `NOTARY_KEYCHAIN_PROFILE` is missing or if notarization or Gatekeeper assessment fails. `ALLOW_UNSIGNED=1` writes a local test image only. Signing and notarization secrets stay off ordinary CI. See `RELEASE_CHECKLIST.md`.
 
 ## Known limitations
 

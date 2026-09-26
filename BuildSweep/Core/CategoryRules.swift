@@ -10,6 +10,7 @@ enum CleanupPolicyError: LocalizedError, Equatable {
     case symlink(String)
     case ruleMismatch(String)
     case sourcePath(String)
+    case identityChanged(String)
 
     var errorDescription: String? {
         switch self {
@@ -22,6 +23,7 @@ enum CleanupPolicyError: LocalizedError, Equatable {
         case .symlink(let value): "Symbolic-link cleanup is blocked: \(value)"
         case .ruleMismatch(let value): "The item no longer matches a known storage rule: \(value)"
         case .sourcePath(let value): "Source and project paths are always blocked: \(value)"
+        case .identityChanged(let value): "The item changed after review and was not moved to Trash: \(value)"
         }
     }
 }
@@ -64,6 +66,28 @@ struct CleanupPathPolicy: Sendable {
             throw CleanupPolicyError.itemMissing(item.displayName)
         }
         return candidate
+    }
+
+    func targetIdentity(of url: URL) throws -> PlannedTargetIdentity {
+        let values = try url.resourceValues(forKeys: [
+            .fileResourceIdentifierKey,
+            .isDirectoryKey,
+            .isSymbolicLinkKey
+        ])
+        guard values.isSymbolicLink != true else { throw CleanupPolicyError.symlink(url.path) }
+        guard let identifier = values.fileResourceIdentifier else {
+            throw CleanupPolicyError.identityChanged(url.lastPathComponent)
+        }
+        let data: Data
+        if let existing = identifier as? Data {
+            data = existing
+        } else if let existing = identifier as? NSData {
+            data = existing as Data
+        } else {
+            throw CleanupPolicyError.identityChanged(url.lastPathComponent)
+        }
+        guard !data.isEmpty else { throw CleanupPolicyError.identityChanged(url.lastPathComponent) }
+        return PlannedTargetIdentity(fileIdentifier: data, isDirectory: values.isDirectory == true)
     }
 
     private func isForbiddenBroadRoot(_ url: URL) -> Bool {
@@ -151,10 +175,20 @@ struct CleanupPathPolicy: Sendable {
     }
 }
 
+struct PlannedTargetIdentity: Codable, Hashable, Sendable, Equatable {
+    let fileIdentifier: Data
+    let isDirectory: Bool
+}
+
 struct DefaultCleanupPlanner: CleanupPlanning {
     private let policy = CleanupPathPolicy()
 
-    func makePlan(from selection: CleanupSelection, snapshot: ScanSnapshot, roots: [AuthorizedRoot]) throws -> CleanupPlan {
+    func makePlan(
+        from selection: CleanupSelection,
+        snapshot: ScanSnapshot,
+        roots: [AuthorizedRoot],
+        freshSimulatorDeviceIDs: Set<String> = []
+    ) throws -> CleanupPlan {
         guard !selection.itemIDs.isEmpty else { throw CleanupPolicyError.noSelection }
         let lookup = Dictionary(uniqueKeysWithValues: snapshot.allItems.map { ($0.id, $0) })
         let developer = roots.first(where: { $0.kind == .developerDirectory })
@@ -165,14 +199,33 @@ struct DefaultCleanupPlanner: CleanupPlanning {
             guard item.action != .inspectionOnly else { throw CleanupPolicyError.inspectionOnly(item.displayName) }
 
             if item.action == .permanentSimulatorDeletion {
+                guard item.kind == .simulatorDevice else { throw CleanupPolicyError.ruleMismatch(item.displayName) }
+                let udid = try SimulatorDeviceIDPolicy.validate(item.id)
+                guard SimulatorFeaturePolicy.deletionEnabled else { throw CleanupPolicyError.inspectionOnly(item.displayName) }
+                let confirmed = try SimulatorDeviceIDPolicy.confirm(udid, listedDeviceIDs: freshSimulatorDeviceIDs)
                 guard let root = developer else { throw CleanupPolicyError.outsideAuthorizedRoot(item.displayName) }
-                return CleanupPlanItem(item: item, authorizedRoot: root.url, canonicalURLAtPlanning: nil)
+                let deviceItem = StorageItem(
+                    id: confirmed,
+                    category: item.category,
+                    kind: item.kind,
+                    displayName: item.displayName,
+                    url: item.url,
+                    size: item.size,
+                    modifiedAt: item.modifiedAt,
+                    lastUsedAt: item.lastUsedAt,
+                    risk: item.risk,
+                    action: item.action,
+                    isDefaultSelected: item.isDefaultSelected,
+                    metadata: item.metadata
+                )
+                return CleanupPlanItem(item: deviceItem, authorizedRoot: root.url, canonicalURLAtPlanning: nil, targetIdentity: nil)
             }
 
             let root = authorizedRoot(for: item, developer: developer, xcodeCache: xcodeCache, roots: roots)
             guard let root else { throw CleanupPolicyError.outsideAuthorizedRoot(item.displayName) }
             let canonical = try policy.validate(item, inside: root.url)
-            return CleanupPlanItem(item: item, authorizedRoot: root.url, canonicalURLAtPlanning: canonical)
+            let identity = try policy.targetIdentity(of: canonical)
+            return CleanupPlanItem(item: item, authorizedRoot: root.url, canonicalURLAtPlanning: canonical, targetIdentity: identity)
         }
 
         return CleanupPlan(

@@ -42,6 +42,13 @@ actor DefaultCleanupExecutor: CleanupExecuting {
                     guard url == planned.canonicalURLAtPlanning else {
                         throw CleanupPolicyError.ruleMismatch(planned.item.displayName)
                     }
+                    guard let expectedIdentity = planned.targetIdentity else {
+                        throw CleanupPolicyError.identityChanged(planned.item.displayName)
+                    }
+                    let currentIdentity = try policy.targetIdentity(of: url)
+                    guard currentIdentity == expectedIdentity else {
+                        throw CleanupPolicyError.identityChanged(planned.item.displayName)
+                    }
                     try trashRouter.moveToTrash(url)
                     successMessage = "Moved to Trash"
                 case .permanentSimulatorDeletion:
