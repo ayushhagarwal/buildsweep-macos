@@ -2,6 +2,7 @@ import SwiftUI
 
 struct DashboardView: View {
     @Bindable var model: AppModel
+    @State private var showingStorageMap = false
 
     private let displayCategories: [StorageCategoryID] = [.derivedData, .archives, .deviceSupport, .simulators, .cachesAndLogs, .aiTools, .developerCaches]
 
@@ -20,6 +21,13 @@ struct DashboardView: View {
             }
         }
         .navigationTitle("Overview")
+        .sheet(isPresented: $showingStorageMap) {
+            if let root = model.developerRoot {
+                DeveloperStorageMapView(root: root.url)
+                    .frame(minWidth: 780, minHeight: 560)
+                    .buildSweepAppearance()
+            }
+        }
     }
 
     private var header: some View {
@@ -31,6 +39,14 @@ struct DashboardView: View {
                     .foregroundStyle(.secondary)
             }
             Spacer()
+            if model.developerRoot != nil {
+                Button {
+                    showingStorageMap = true
+                } label: {
+                    Label("Storage Map", systemImage: "square.grid.3x3.fill")
+                }
+                .help("Explore storage inside the authorized Library/Developer folder. Read-only.")
+            }
             if model.xcodeIsRunning {
                 Label("Xcode is running", systemImage: "exclamationmark.triangle.fill")
                     .foregroundStyle(.orange)
@@ -143,6 +159,219 @@ struct DashboardView: View {
         if case .scanning(let completed, let total) = model.scanState { return "Scanning progressively — \(completed) of \(total) categories" }
         guard let completedAt = model.snapshot.completedAt else { return "No completed scan yet" }
         return "Last scan \(completedAt.formatted(.relative(presentation: .named))) · \(BuildSweepFormatters.date(completedAt))"
+    }
+}
+
+private struct DeveloperStorageMapView: View {
+    private let root: URL
+    @Environment(\.dismiss) private var dismiss
+    @State private var currentURL: URL
+    @State private var currentTitle: String
+    @State private var children: [StorageChildSummary] = []
+    @State private var selected: StorageChildSummary?
+    @State private var isLoading = true
+    @State private var errorMessage: String?
+    @State private var totalCount = 0
+
+    init(root: URL) {
+        self.root = root
+        _currentURL = State(initialValue: root)
+        _currentTitle = State(initialValue: "Developer")
+    }
+
+    private var canGoBack: Bool { currentURL != root }
+    private var totalSize: Int64 { children.reduce(0) { $0 + ($1.size ?? 0) } }
+
+    var body: some View {
+        VStack(spacing: 0) {
+            HStack {
+                VStack(alignment: .leading, spacing: 4) {
+                    Text("Developer storage map").font(.largeTitle.bold())
+                    Text("\(currentTitle) · \(BuildSweepFormatters.bytes(totalSize)) allocated · \(totalCount) items")
+                        .foregroundStyle(.secondary)
+                }
+                Spacer()
+                Button("Done") { dismiss() }
+            }
+            .padding(20)
+
+            HStack(spacing: 8) {
+                Button {
+                    currentURL = root
+                    currentTitle = "Developer"
+                    selected = nil
+                } label: {
+                    Label("Developer", systemImage: "house")
+                }
+                .buttonStyle(.link)
+                if canGoBack {
+                    Text("/").foregroundStyle(.tertiary)
+                    Text(currentURL.lastPathComponent).foregroundStyle(.secondary).lineLimit(1)
+                    Spacer()
+                    Button("Parent Folder") {
+                        currentURL = currentURL.deletingLastPathComponent()
+                        currentTitle = currentURL.lastPathComponent
+                        selected = nil
+                    }
+                } else {
+                    Spacer()
+                }
+            }
+            .padding(.horizontal, 20)
+            .padding(.bottom, 12)
+
+            Group {
+                if isLoading {
+                    ProgressView("Measuring folder sizes…").frame(maxWidth: .infinity, maxHeight: .infinity)
+                } else if let errorMessage {
+                    ContentUnavailableView("Couldn’t read this folder", systemImage: "folder.badge.questionmark", description: Text(errorMessage))
+                } else if children.isEmpty {
+                    ContentUnavailableView("No items in this folder", systemImage: "folder", description: Text("There is no storage to map at this level."))
+                } else {
+                    HStack(spacing: 0) {
+                        TreemapTileView(children: children, onSelect: { selected = $0 })
+                            .padding(12)
+                        if let selected {
+                            mapItemInspector(selected)
+                                .frame(width: 250)
+                                .padding(.trailing, 16)
+                        }
+                    }
+                }
+            }
+            .frame(maxWidth: .infinity, maxHeight: .infinity)
+
+            HStack {
+                Label("Folders can be opened for deeper inspection", systemImage: "folder")
+                Spacer()
+                Text("Read-only · allocated-size estimates · no file contents read")
+            }
+            .font(.caption)
+            .foregroundStyle(.secondary)
+            .padding(14)
+            .background(.bar)
+        }
+        .task(id: currentURL) {
+            isLoading = true
+            errorMessage = nil
+            do {
+                let result = try await DirectorySizer().inspectImmediateChildren(of: currentURL, limit: 200)
+                children = result.children
+                totalCount = result.totalCount
+            } catch is CancellationError {
+                return
+            } catch {
+                children = []
+                errorMessage = error.localizedDescription
+            }
+            isLoading = false
+        }
+    }
+
+    @ViewBuilder
+    private func mapItemInspector(_ item: StorageChildSummary) -> some View {
+        VStack(alignment: .leading, spacing: 12) {
+            Label(item.isDirectory ? "Folder" : "File", systemImage: item.isDirectory ? "folder.fill" : "doc.fill")
+                .font(.caption.weight(.semibold)).foregroundStyle(.secondary)
+            Text(item.name).font(.title3.bold()).textSelection(.enabled)
+            Text(item.url.path(percentEncoded: false))
+                .font(.caption.monospaced()).foregroundStyle(.secondary).textSelection(.enabled)
+            LabeledContent("Allocated", value: item.size.map(BuildSweepFormatters.bytes) ?? "Unavailable")
+            LabeledContent("Modified", value: item.modifiedAt.map { $0.formatted(date: .abbreviated, time: .shortened) } ?? "Unknown")
+            if item.isSymbolicLink {
+                Label("Symbolic links are not traversed.", systemImage: "link")
+                    .font(.caption).foregroundStyle(.secondary)
+            }
+            Spacer()
+            if item.isDirectory && !item.isSymbolicLink {
+                Button("Open Folder") {
+                    currentURL = item.url
+                    currentTitle = item.name
+                    selected = nil
+                }
+                .buttonStyle(.borderedProminent)
+            }
+            Button("Reveal in Finder") { NSWorkspace.shared.activateFileViewerSelecting([item.url]) }
+                .buttonStyle(.link)
+        }
+        .padding(16)
+        .frame(maxHeight: .infinity, alignment: .topLeading)
+        .surfaceCard(cornerRadius: 14)
+    }
+}
+
+private struct TreemapTileView: View {
+    let children: [StorageChildSummary]
+    let onSelect: (StorageChildSummary) -> Void
+
+    var body: some View {
+        GeometryReader { geometry in
+            let placements = TreemapPartition.layout(children, in: CGRect(origin: .zero, size: geometry.size))
+            ZStack(alignment: .topLeading) {
+                ForEach(children) { child in
+                    if let rect = placements[child.id] {
+                        Button { onSelect(child) } label: {
+                            VStack(alignment: .leading, spacing: 5) {
+                                Image(systemName: child.isDirectory ? "folder.fill" : "doc.fill")
+                                if rect.width > 86 && rect.height > 38 {
+                                    Text(child.name).lineLimit(2).multilineTextAlignment(.leading)
+                                    Text(child.size.map(BuildSweepFormatters.bytes) ?? "Unavailable")
+                                        .font(.caption2.monospacedDigit()).opacity(0.76)
+                                }
+                            }
+                            .font(.caption.weight(.semibold))
+                            .foregroundStyle(.primary)
+                            .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
+                            .padding(8)
+                            .background(child.isDirectory ? BuildSweepTheme.accentSoft : BuildSweepTheme.categoryFill(for: .developerCaches), in: RoundedRectangle(cornerRadius: 8))
+                            .overlay(RoundedRectangle(cornerRadius: 8).stroke(.white.opacity(0.75), lineWidth: 2))
+                        }
+                        .buttonStyle(.plain)
+                        .frame(width: max(0, rect.width - 3), height: max(0, rect.height - 3))
+                        .position(x: rect.midX, y: rect.midY)
+                        .help("\(child.name) · \(child.size.map(BuildSweepFormatters.bytes) ?? "size unavailable")")
+                    }
+                }
+            }
+        }
+        .accessibilityLabel("Read-only treemap of folder usage")
+    }
+}
+
+private enum TreemapPartition {
+    static func layout(_ items: [StorageChildSummary], in rect: CGRect) -> [String: CGRect] {
+        var result: [String: CGRect] = [:]
+        partition(items.sorted { ($0.size ?? 0) > ($1.size ?? 0) }, in: rect, into: &result)
+        return result
+    }
+
+    private static func partition(_ items: [StorageChildSummary], in rect: CGRect, into result: inout [String: CGRect]) {
+        guard !items.isEmpty else { return }
+        guard items.count > 1 else {
+            result[items[0].id] = rect
+            return
+        }
+        let weights = items.map { max(1, $0.size ?? 0) }
+        let total = Double(weights.reduce(0, +))
+        let target = total / 2
+        var accumulated = 0.0
+        var splitIndex = 1
+        for index in 0..<(items.count - 1) {
+            accumulated += Double(weights[index])
+            splitIndex = index + 1
+            if accumulated >= target { break }
+        }
+        let firstWeight = weights[..<splitIndex].reduce(0, +)
+        let fraction = min(0.92, max(0.08, Double(firstWeight) / total))
+        if rect.width >= rect.height {
+            let width = rect.width * fraction
+            partition(Array(items[..<splitIndex]), in: CGRect(x: rect.minX, y: rect.minY, width: width, height: rect.height), into: &result)
+            partition(Array(items[splitIndex...]), in: CGRect(x: rect.minX + width, y: rect.minY, width: rect.width - width, height: rect.height), into: &result)
+        } else {
+            let height = rect.height * fraction
+            partition(Array(items[..<splitIndex]), in: CGRect(x: rect.minX, y: rect.minY, width: rect.width, height: height), into: &result)
+            partition(Array(items[splitIndex...]), in: CGRect(x: rect.minX, y: rect.minY + height, width: rect.width, height: rect.height - height), into: &result)
+        }
     }
 }
 

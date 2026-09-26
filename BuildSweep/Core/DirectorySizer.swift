@@ -62,6 +62,7 @@ actor DirectorySizer {
             children.append(StorageChildSummary(
                 url: child,
                 isDirectory: childValues?.isDirectory == true,
+                isSymbolicLink: isSymlink,
                 size: size,
                 modifiedAt: childValues?.contentModificationDate
             ))

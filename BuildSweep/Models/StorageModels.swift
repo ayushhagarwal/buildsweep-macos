@@ -141,6 +141,7 @@ struct StorageItem: Identifiable, Codable, Hashable, Sendable {
 struct StorageChildSummary: Identifiable, Hashable, Sendable {
     let url: URL
     let isDirectory: Bool
+    let isSymbolicLink: Bool
     let size: Int64?
     let modifiedAt: Date?
 

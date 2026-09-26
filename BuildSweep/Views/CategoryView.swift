@@ -368,7 +368,7 @@ private struct StorageInspectionBrowser: View {
                     ContentUnavailableView("No contents", systemImage: "folder", description: Text("This folder is empty."))
                 } else if let inspection {
                     List(inspection.children) { child in
-                        if child.isDirectory {
+                        if child.isDirectory && !child.isSymbolicLink {
                             NavigationLink {
                                 StorageInspectionBrowser(url: child.url, title: child.name)
                             } label: {
