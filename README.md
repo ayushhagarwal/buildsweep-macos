@@ -36,7 +36,7 @@ The app is free. It does not use StoreKit, a paywall, or a license key.
 - Simulator runtimes remain inspection-only and are managed in Xcode Settings › Components.
 - Cursor, Codex, or Claude caches are not preselected and cannot be trashed while that app is running.
 
-See `RELEASE_CHECKLIST.md`, `SANDBOX_FEASIBILITY.md`, and `STOREKIT_HANDOFF.md` before distribution.
+See `RELEASE_CHECKLIST.md` and `SANDBOX_FEASIBILITY.md` before distribution. Releases are notarized disk images, not Mac App Store builds.
 
 ## License
 
