@@ -21,6 +21,11 @@ enum AIToolAllowlist {
     static var cursorChildNames: Set<String> { Set(cursorSupport + cursorHome) }
     static var codexChildNames: Set<String> { Set(codexHome) }
     static var claudeChildNames: Set<String> { Set(claudeHome + claudeSupport) }
+
+    static func scope(for name: String) -> AIToolDataScope {
+        let value = name.lowercased()
+        return value.contains("log") || value.contains("crash") || value.contains("tracking") ? .logs : .cache
+    }
 }
 
 actor AIToolStorageScanner: StorageScanner {
@@ -43,21 +48,21 @@ actor AIToolStorageScanner: StorageScanner {
             names: AIToolAllowlist.cursorSupport,
             kind: .cursorCache,
             tool: "Cursor",
-            isRunning: context.cursorIsRunning
+            context: context
         )
         items += try await scanChildren(
             root: context.cursorHomeRoot,
             names: AIToolAllowlist.cursorHome,
             kind: .cursorCache,
             tool: "Cursor",
-            isRunning: context.cursorIsRunning
+            context: context
         )
         items += try await scanChildren(
             root: context.codexHomeRoot,
             names: AIToolAllowlist.codexHome,
             kind: .codexCache,
             tool: "Codex",
-            isRunning: context.codexIsRunning
+            context: context
         )
         for cacheRoot in context.codexSystemCacheRoots {
             if let item = try await scanExactRoot(
@@ -65,7 +70,7 @@ actor AIToolStorageScanner: StorageScanner {
                 kind: .codexCache,
                 displayName: cacheRoot.lastPathComponent == "Codex" ? "Codex Library Cache" : "Codex system cache",
                 tool: "Codex",
-                isRunning: context.codexIsRunning
+                context: context
             ) {
                 items.append(item)
             }
@@ -75,14 +80,14 @@ actor AIToolStorageScanner: StorageScanner {
             names: AIToolAllowlist.claudeHome,
             kind: .claudeCache,
             tool: "Claude",
-            isRunning: context.claudeIsRunning
+            context: context
         )
         if let item = try await scanExactRoot(
             context.claudeSystemCacheRoot,
             kind: .claudeCache,
             displayName: "Claude desktop cache",
             tool: "Claude",
-            isRunning: context.claudeIsRunning
+            context: context
         ) {
             items.append(item)
         }
@@ -91,7 +96,7 @@ actor AIToolStorageScanner: StorageScanner {
             names: AIToolAllowlist.claudeSupport,
             kind: .claudeCache,
             tool: "Claude",
-            isRunning: context.claudeIsRunning
+            context: context
         )
 
         if context.cursorIsRunning {
@@ -117,7 +122,7 @@ actor AIToolStorageScanner: StorageScanner {
         names: [String],
         kind: StorageItemKind,
         tool: String,
-        isRunning: Bool
+        context: ScanContext
     ) async throws -> [StorageItem] {
         guard let root else { return [] }
         var items: [StorageItem] = []
@@ -128,17 +133,29 @@ actor AIToolStorageScanner: StorageScanner {
             guard !containsForbiddenName(url) else { continue }
             let values = try? url.resourceValues(forKeys: [.contentModificationDateKey])
             let size = try await sizer.allocatedSize(of: url)
+            let scope = AIToolAllowlist.scope(for: name)
+            let scopeEnabled = context.isAIToolScopeEnabled(tool: tool, scope: scope)
+            let newestDate = scope == .logs ? try await sizer.newestModificationDate(of: url) : values?.contentModificationDate
+            let retentionCutoff = Date.now.addingTimeInterval(-Double(context.aiLogRetentionDays) * 86_400)
+            let protectedByRetention = scope == .logs && context.aiLogRetentionDays > 0
+                && (newestDate.map { $0 >= retentionCutoff } ?? true)
+            let isCleanable = scopeEnabled && !protectedByRetention
             items.append(StorageItem(
                 category: .aiTools,
                 kind: kind,
                 displayName: "\(tool) \(name)",
                 url: url,
                 size: size,
-                modifiedAt: values?.contentModificationDate,
-                risk: .regenerates,
-                action: .trash,
+                modifiedAt: newestDate,
+                risk: isCleanable ? .regenerates : .inspectionOnly,
+                action: isCleanable ? .trash : .inspectionOnly,
                 isDefaultSelected: false,
-                metadata: ["Tool": tool, "Folder": name]
+                metadata: [
+                    "Tool": tool,
+                    "Scope": scope.title,
+                    "Folder": name,
+                    "Cleanup": !scopeEnabled ? "Disabled in Settings" : (protectedByRetention ? "Preserved by log retention" : "Available")
+                ]
             ))
         }
         return items
@@ -149,12 +166,13 @@ actor AIToolStorageScanner: StorageScanner {
         kind: StorageItemKind,
         displayName: String,
         tool: String,
-        isRunning: Bool
+        context: ScanContext
     ) async throws -> StorageItem? {
         guard let root, fileManager.fileExists(atPath: root.path) else { return nil }
         guard AIToolAllowlist.systemCacheFolderNames.contains(root.lastPathComponent) else { return nil }
         let values = try? root.resourceValues(forKeys: [.contentModificationDateKey])
         let size = try await sizer.allocatedSize(of: root)
+        let scopeEnabled = context.isAIToolScopeEnabled(tool: tool, scope: .cache)
         return StorageItem(
             category: .aiTools,
             kind: kind,
@@ -162,10 +180,10 @@ actor AIToolStorageScanner: StorageScanner {
             url: root,
             size: size,
             modifiedAt: values?.contentModificationDate,
-            risk: .regenerates,
-            action: .trash,
+            risk: scopeEnabled ? .regenerates : .inspectionOnly,
+            action: scopeEnabled ? .trash : .inspectionOnly,
             isDefaultSelected: false,
-            metadata: ["Tool": tool, "Folder": root.lastPathComponent]
+            metadata: ["Tool": tool, "Scope": AIToolDataScope.cache.title, "Folder": root.lastPathComponent, "Cleanup": scopeEnabled ? "Available" : "Disabled in Settings"]
         )
     }
 

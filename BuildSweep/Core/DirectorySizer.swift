@@ -68,4 +68,34 @@ actor DirectorySizer {
         }
         return StorageChildrenInspection(children: children, totalCount: urls.count)
     }
+
+    func newestModificationDate(of url: URL) throws -> Date? {
+        let keys: Set<URLResourceKey> = [.isRegularFileKey, .isSymbolicLinkKey, .isDirectoryKey, .contentModificationDateKey]
+        let rootValues = try url.resourceValues(forKeys: keys)
+        guard rootValues.isSymbolicLink != true else { return nil }
+        if rootValues.isRegularFile == true { return rootValues.contentModificationDate }
+        var newest = rootValues.contentModificationDate
+        var enumerationError: Error?
+        guard let enumerator = fileManager.enumerator(
+            at: url,
+            includingPropertiesForKeys: Array(keys),
+            options: [],
+            errorHandler: { _, error in enumerationError = error; return false }
+        ) else { throw CocoaError(.fileReadNoPermission) }
+        var visited = 0
+        for case let fileURL as URL in enumerator {
+            visited += 1
+            if visited.isMultiple(of: 256) { try Task.checkCancellation() }
+            let values = try fileURL.resourceValues(forKeys: keys)
+            if values.isSymbolicLink == true {
+                if values.isDirectory == true { enumerator.skipDescendants() }
+                continue
+            }
+            if let date = values.contentModificationDate, newest.map({ date > $0 }) ?? true {
+                newest = date
+            }
+        }
+        if let enumerationError { throw enumerationError }
+        return newest
+    }
 }

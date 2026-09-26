@@ -57,8 +57,33 @@ struct SettingsView: View {
                                     .foregroundStyle(.secondary)
                                     .textSelection(.enabled)
                             }
+                            ForEach(AIToolDataScope.allCases) { scope in
+                                Toggle("\(scope.title) cleanup", isOn: Binding(
+                                    get: { model.isAIToolScopeEnabled(scope, for: group) },
+                                    set: { model.setAIToolScopeEnabled($0, scope: scope, for: group) }
+                                ))
+                                Text("Included locations: \(scopeDescription(scope, for: group))")
+                                    .font(.caption)
+                                    .foregroundStyle(.secondary)
+                                    .fixedSize(horizontal: false, vertical: true)
+                            }
                         }
+                        .padding(.vertical, 6)
                     }
+                }
+                Section("AI tool log retention") {
+                    Picker("Keep recent logs out of cleanup", selection: Binding(
+                        get: { model.aiLogRetentionDays },
+                        set: { model.setAILogRetentionDays($0) }
+                    )) {
+                        Text("Off").tag(0)
+                        Text("7 days").tag(7)
+                        Text("30 days").tag(30)
+                        Text("90 days").tag(90)
+                    }
+                    Text("A log folder stays inspection-only if any file in it was modified within this period. BuildSweep checks dates and sizes, not log contents.")
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
                 }
                 Section("Local data") {
                     Button("Clear Cleanup History", role: .destructive) { Task { await model.clearHistory() } }
@@ -102,5 +127,16 @@ struct SettingsView: View {
     private func mailURL(subject: String) -> URL {
         let encoded = subject.addingPercentEncoding(withAllowedCharacters: .urlQueryAllowed) ?? subject
         return URL(string: "mailto:support@ayushdev.com?subject=\(encoded)")!
+    }
+
+    private func scopeDescription(_ scope: AIToolDataScope, for group: AIToolGroup) -> String {
+        switch (group, scope) {
+        case (.cursor, .cache): "Cache, CachedData, CachedExtensionVSIXs, Code Cache, GPUCache, DawnGraphiteCache, DawnWebGPUCache, blob_storage"
+        case (.cursor, .logs): "Crashpad, logs, ai-tracking, debug-logs"
+        case (.codex, .cache): "cache, .tmp, and the granted Codex system cache folders"
+        case (.codex, .logs): "No separate Codex log folders are currently scanned"
+        case (.claude, .cache): "cache, Cache, CachedData, GPUCache, and the granted Claude system cache"
+        case (.claude, .logs): "logs"
+        }
     }
 }

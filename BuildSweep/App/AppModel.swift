@@ -35,6 +35,7 @@ final class AppModel {
     private let loginService: LaunchAtLoginService
     private let defaults: UserDefaults
     private let onboardingKey = "onboardingCompleted.v1"
+    private let aiLogRetentionKey = "aiLogRetentionDays.v1"
     private var scanTask: Task<Void, Never>?
 
     init(
@@ -169,6 +170,25 @@ final class AppModel {
         startScan()
     }
 
+    func isAIToolScopeEnabled(_ scope: AIToolDataScope, for group: AIToolGroup) -> Bool {
+        defaults.object(forKey: aiScopePreferenceKey(scope, group: group)) as? Bool ?? true
+    }
+
+    func setAIToolScopeEnabled(_ enabled: Bool, scope: AIToolDataScope, for group: AIToolGroup) {
+        defaults.set(enabled, forKey: aiScopePreferenceKey(scope, group: group))
+        startScan()
+    }
+
+    var aiLogRetentionDays: Int {
+        defaults.object(forKey: aiLogRetentionKey) == nil ? 30 : defaults.integer(forKey: aiLogRetentionKey)
+    }
+
+    func setAILogRetentionDays(_ days: Int) {
+        guard [0, 7, 30, 90].contains(days) else { return }
+        defaults.set(days, forKey: aiLogRetentionKey)
+        startScan()
+    }
+
     func forgetRoot(_ root: AuthorizedRoot) async {
         await authorizer.forget(root)
         authorizedRoots.removeAll { $0.id == root.id }
@@ -208,7 +228,13 @@ final class AppModel {
             claudeSupportRoot: rootURL(for: .claudeSupport),
             cursorIsRunning: cursorIsRunning,
             codexIsRunning: codexIsRunning,
-            claudeIsRunning: claudeIsRunning
+            claudeIsRunning: claudeIsRunning,
+            disabledAIToolScopes: Set(AIToolGroup.allCases.flatMap { group in
+                AIToolDataScope.allCases.compactMap { scope in
+                    isAIToolScopeEnabled(scope, for: group) ? nil : "\(group.rawValue).\(scope.rawValue)"
+                }
+            }),
+            aiLogRetentionDays: aiLogRetentionDays
         )
         var categories = StorageCategoryID.allCases.filter { $0.isScannable && $0 != .aiTools }
         if context.hasAIRoots {
@@ -376,6 +402,10 @@ final class AppModel {
 
     private func rootURL(for kind: AuthorizedRootKind) -> URL? {
         authorizedRoots.first { $0.kind == kind }?.url
+    }
+
+    private func aiScopePreferenceKey(_ scope: AIToolDataScope, group: AIToolGroup) -> String {
+        "aiCleanup.\(group.rawValue).\(scope.rawValue).enabled.v1"
     }
 
     private func matchesGrant(_ root: AuthorizedRoot, target: (kind: AuthorizedRootKind, url: URL)) -> Bool {

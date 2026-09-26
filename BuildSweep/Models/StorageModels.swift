@@ -273,6 +273,14 @@ enum AuthorizedRootKind: String, Codable, Sendable {
     }
 }
 
+enum AIToolDataScope: String, CaseIterable, Identifiable, Sendable {
+    case cache
+    case logs
+
+    var id: String { rawValue }
+    var title: String { self == .cache ? "Caches" : "Logs" }
+}
+
 enum AIToolGroup: String, CaseIterable, Identifiable, Sendable {
     case cursor
     case codex
@@ -339,6 +347,8 @@ struct ScanContext: Sendable {
     let cursorIsRunning: Bool
     let codexIsRunning: Bool
     let claudeIsRunning: Bool
+    let disabledAIToolScopes: Set<String>
+    let aiLogRetentionDays: Int
 
     var hasAIRoots: Bool {
         cursorSupportRoot != nil
@@ -364,7 +374,9 @@ struct ScanContext: Sendable {
         claudeSupportRoot: URL? = nil,
         cursorIsRunning: Bool = false,
         codexIsRunning: Bool = false,
-        claudeIsRunning: Bool = false
+        claudeIsRunning: Bool = false,
+        disabledAIToolScopes: Set<String> = [],
+        aiLogRetentionDays: Int = 30
     ) {
         self.developerRoot = developerRoot
         self.xcodeCacheRoot = xcodeCacheRoot
@@ -380,6 +392,12 @@ struct ScanContext: Sendable {
         self.cursorIsRunning = cursorIsRunning
         self.codexIsRunning = codexIsRunning
         self.claudeIsRunning = claudeIsRunning
+        self.disabledAIToolScopes = disabledAIToolScopes
+        self.aiLogRetentionDays = aiLogRetentionDays
+    }
+
+    func isAIToolScopeEnabled(tool: String, scope: AIToolDataScope) -> Bool {
+        !disabledAIToolScopes.contains("\(tool.lowercased()).\(scope.rawValue)")
     }
 }
 
