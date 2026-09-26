@@ -187,7 +187,7 @@ private struct DeveloperStorageMapView: View {
             HStack {
                 VStack(alignment: .leading, spacing: 4) {
                     Text("Developer storage map").font(.largeTitle.bold())
-                    Text("\(currentTitle) · \(BuildSweepFormatters.bytes(totalSize)) allocated · \(totalCount) items")
+                    Text("\(currentTitle) · \(BuildSweepFormatters.bytes(totalSize)) mapped · showing \(children.count) of \(totalCount) items")
                         .foregroundStyle(.secondary)
                 }
                 Spacer()
@@ -244,7 +244,7 @@ private struct DeveloperStorageMapView: View {
             HStack {
                 Label("Folders can be opened for deeper inspection", systemImage: "folder")
                 Spacer()
-                Text("Read-only · allocated-size estimates · no file contents read")
+                Text("Read-only · sizes cover the shown items only · first 200 items alphabetically · no file contents read")
             }
             .font(.caption)
             .foregroundStyle(.secondary)
