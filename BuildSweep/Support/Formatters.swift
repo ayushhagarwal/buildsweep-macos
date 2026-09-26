@@ -54,6 +54,14 @@ enum RealUserHome {
     static var claudeSupportDirectory: URL {
         directory.appending(path: "Library/Application Support/Claude", directoryHint: .isDirectory)
     }
+
+    static var swiftPackageCacheDirectory: URL { directory.appending(path: "Library/Caches/org.swift.swiftpm", directoryHint: .isDirectory) }
+    static var cocoaPodsCacheDirectory: URL { directory.appending(path: "Library/Caches/CocoaPods", directoryHint: .isDirectory) }
+    static var carthageCacheDirectory: URL { directory.appending(path: "Library/Caches/org.carthage.CarthageKit", directoryHint: .isDirectory) }
+    static var npmCacheDirectory: URL { directory.appending(path: ".npm/_cacache", directoryHint: .isDirectory) }
+    static var yarnCacheDirectory: URL { directory.appending(path: "Library/Caches/Yarn", directoryHint: .isDirectory) }
+    static var pnpmStoreDirectory: URL { directory.appending(path: "Library/pnpm/store", directoryHint: .isDirectory) }
+    static var bunCacheDirectory: URL { directory.appending(path: ".bun/install/cache", directoryHint: .isDirectory) }
 }
 
 enum BuildSweepFormatters {
@@ -93,4 +101,3 @@ extension URL {
         return candidate.count > parent.count && candidate.starts(with: parent)
     }
 }
-

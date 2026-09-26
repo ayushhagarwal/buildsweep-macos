@@ -3,7 +3,7 @@ import SwiftUI
 struct DashboardView: View {
     @Bindable var model: AppModel
 
-    private let displayCategories: [StorageCategoryID] = [.derivedData, .archives, .deviceSupport, .simulators, .cachesAndLogs, .aiTools]
+    private let displayCategories: [StorageCategoryID] = [.derivedData, .archives, .deviceSupport, .simulators, .cachesAndLogs, .aiTools, .developerCaches]
 
     var body: some View {
         ZStack {
@@ -188,6 +188,7 @@ private struct CategoryRow: View {
         case .simulators: "Devices and installed runtimes"
         case .cachesAndLogs: "Known Xcode caches, documentation, and logs"
         case .aiTools: "Cursor, Codex, and Claude caches and logs"
+        case .developerCaches: "Separately approved Swift, Apple, and JavaScript package caches"
         default: ""
         }
     }

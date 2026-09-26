@@ -26,6 +26,7 @@ actor XcodeStorageScanner: StorageScanner {
         case .deviceSupport: return try await scanDeviceSupport(context)
         case .cachesAndLogs: return try await scanCachesAndLogs(context)
         case .simulators: return try await scanSimulators(context)
+        case .developerCaches: return try await scanDeveloperCaches(context)
         case .overview, .history, .aiTools:
             return StorageCategorySnapshot(category: category, items: [], scannedAt: .now, warnings: [])
         }
@@ -217,6 +218,31 @@ actor XcodeStorageScanner: StorageScanner {
         } catch {
             return StorageCategorySnapshot(category: category, items: [], scannedAt: .now, warnings: ["Simulator inventory is unavailable in this sandboxed build. Manage runtimes in Xcode Settings › Components."], status: .partial)
         }
+    }
+
+    private func scanDeveloperCaches(_ context: ScanContext) async throws -> StorageCategorySnapshot {
+        var items: [StorageItem] = []
+        for group in DeveloperCacheGroup.allCases {
+            try Task.checkCancellation()
+            let expected = group.url.canonicalFileURL
+            guard let root = context.developerPackageCacheRoots.first(where: { $0.canonicalFileURL == expected }),
+                  fileManager.fileExists(atPath: root.path) else { continue }
+            let values = try? root.resourceValues(forKeys: [.contentModificationDateKey, .isSymbolicLinkKey])
+            guard values?.isSymbolicLink != true else { continue }
+            let size = try await sizer.allocatedSize(of: root)
+            items.append(StorageItem(
+                category: .developerCaches,
+                kind: .packageManagerCache,
+                displayName: "\(group.title) cache",
+                url: root,
+                size: size,
+                modifiedAt: values?.contentModificationDate,
+                risk: .redownloads,
+                action: .trash,
+                metadata: ["Tool": group.title, "Effect": group.consequence]
+            ))
+        }
+        return snapshot(items: items)
     }
 
     private func snapshot(items: [StorageItem]) -> StorageCategorySnapshot {

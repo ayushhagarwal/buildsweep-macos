@@ -96,6 +96,9 @@ struct CategoryView: View {
                     Text("Open Settings")
                 }
                 .buttonStyle(.borderedProminent)
+            } else if category == .developerCaches && !DeveloperCacheGroup.allCases.contains(where: { model.packageCacheRoot(for: $0) != nil }) {
+                SettingsLink { Text("Choose package-manager caches") }
+                    .buttonStyle(.borderedProminent)
             } else {
                 Button("Scan Again") { model.startScan() }
                     .buttonStyle(.borderedProminent)
@@ -109,6 +112,9 @@ struct CategoryView: View {
         if model.snapshot.categories[category]?.status == .partial { return "Some data couldn’t be scanned" }
         if category == .aiTools && !model.hasAnyAIRoot {
             return "Grant an AI tool folder"
+        }
+        if category == .developerCaches && !DeveloperCacheGroup.allCases.contains(where: { model.packageCacheRoot(for: $0) != nil }) {
+            return "Choose cache folders to inspect"
         }
         return "Nothing found"
     }
@@ -125,6 +131,9 @@ struct CategoryView: View {
         }
         if category == .aiTools {
             return "No AI tool caches were found in the granted folders."
+        }
+        if category == .developerCaches {
+            return "No allowlisted package-manager caches were found in the individually approved locations."
         }
         return "Run a scan, adjust the search, or confirm that Xcode has created this kind of storage."
     }

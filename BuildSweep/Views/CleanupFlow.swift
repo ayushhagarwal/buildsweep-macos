@@ -167,6 +167,7 @@ struct CleanupReviewView: View {
         case .deviceLog: "Known Xcode device log location; review its contents first."
         case .xcodeCache: "Known direct child of the optional Xcode cache folder."
         case .cursorCache, .codexCache, .claudeCache: "Allowlisted cache or log folder in the granted tool location."
+        case .packageManagerCache: "Exact cache location individually approved in Settings."
         case .previewData, .simulatorDevice, .simulatorRuntime: "This item is not currently eligible for cleanup."
         }
     }
@@ -181,6 +182,7 @@ struct CleanupReviewView: View {
         case .deviceLog: "Removes diagnostic records that may help investigate device issues."
         case .xcodeCache: "Xcode can recreate this cache."
         case .cursorCache, .codexCache, .claudeCache: "The tool may regenerate cache data; logs can contain useful diagnostics."
+        case .packageManagerCache: item.metadata["Effect"] ?? "Packages may need to be downloaded or rebuilt again."
         case .previewData, .simulatorDevice, .simulatorRuntime: item.risk.explanation
         }
     }

@@ -118,6 +118,8 @@ struct CleanupPathPolicy: Sendable {
         switch item.kind {
         case .codexCache, .claudeCache:
             return AIToolAllowlist.systemCacheFolderNames.contains(root.lastPathComponent)
+        case .packageManagerCache:
+            return DeveloperCacheGroup.allCases.contains { $0.url.canonicalFileURL == candidate && candidate == root }
         default:
             return false
         }
@@ -169,6 +171,8 @@ struct CleanupPathPolicy: Sendable {
                 return AIToolAllowlist.systemCacheFolderNames.contains(root.lastPathComponent)
             }
             return isExactAllowlistedChild(relative, names: AIToolAllowlist.claudeChildNames)
+        case .packageManagerCache:
+            return candidate == root && DeveloperCacheGroup.allCases.contains { $0.url.canonicalFileURL == candidate }
         case .simulatorDevice, .simulatorRuntime:
             return false
         }
@@ -251,6 +255,9 @@ struct DefaultCleanupPlanner: CleanupPlanning {
             return matchingAIRoot(item, in: roots, kinds: [.codexHome, .codexSystemCache])
         case .claudeCache:
             return matchingAIRoot(item, in: roots, kinds: [.claudeHome, .claudeSystemCache, .claudeSupport])
+        case .packageManagerCache:
+            guard let url = item.url?.canonicalFileURL else { return nil }
+            return roots.first { $0.kind == .developerPackageCache && $0.url.canonicalFileURL == url }
         default:
             return developer
         }

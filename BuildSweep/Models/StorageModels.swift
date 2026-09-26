@@ -36,6 +36,7 @@ enum StorageCategoryID: String, Codable, CaseIterable, Hashable, Identifiable, S
     case deviceSupport
     case cachesAndLogs
     case aiTools
+    case developerCaches
     case history
 
     var id: String { rawValue }
@@ -49,6 +50,7 @@ enum StorageCategoryID: String, Codable, CaseIterable, Hashable, Identifiable, S
         case .deviceSupport: "Device Support"
         case .cachesAndLogs: "Caches & Logs"
         case .aiTools: "AI Tools"
+        case .developerCaches: "Package Caches"
         case .history: "History"
         }
     }
@@ -62,6 +64,7 @@ enum StorageCategoryID: String, Codable, CaseIterable, Hashable, Identifiable, S
         case .deviceSupport: "externaldrive"
         case .cachesAndLogs: "doc.text.magnifyingglass"
         case .aiTools: "cpu"
+        case .developerCaches: "shippingbox.and.arrow.backward"
         case .history: "clock.arrow.circlepath"
         }
     }
@@ -83,6 +86,7 @@ enum StorageItemKind: String, Codable, Sendable {
     case cursorCache
     case codexCache
     case claudeCache
+    case packageManagerCache
 }
 
 enum CleanupActionKind: String, Codable, Sendable {
@@ -208,11 +212,12 @@ enum AuthorizedRootKind: String, Codable, Sendable {
     case claudeHome
     case claudeSystemCache
     case claudeSupport
+    case developerPackageCache
 
     var isAI: Bool {
         switch self {
-        case .developerDirectory, .xcodeCache: false
-        default: true
+        case .developerDirectory, .xcodeCache, .developerPackageCache: false
+        case .cursorSupport, .cursorHome, .codexHome, .codexSystemCache, .claudeHome, .claudeSystemCache, .claudeSupport: true
         }
     }
 
@@ -227,6 +232,7 @@ enum AuthorizedRootKind: String, Codable, Sendable {
         case .claudeHome: "Choose the .claude folder"
         case .claudeSystemCache: "Choose com.anthropic.claudefordesktop"
         case .claudeSupport: "Choose Application Support/Claude"
+        case .developerPackageCache: "Choose the specific package-manager cache folder"
         }
     }
 
@@ -241,6 +247,7 @@ enum AuthorizedRootKind: String, Codable, Sendable {
         case .claudeHome: "Choose your .claude folder exactly."
         case .claudeSystemCache: "Choose Library/Caches/com.anthropic.claudefordesktop exactly."
         case .claudeSupport: "Choose Library/Application Support/Claude exactly."
+        case .developerPackageCache: "Choose one of the package-manager cache folders listed in Settings exactly."
         }
     }
 
@@ -255,6 +262,7 @@ enum AuthorizedRootKind: String, Codable, Sendable {
         case .claudeHome: [RealUserHome.claudeHomeDirectory]
         case .claudeSystemCache: [RealUserHome.claudeSystemCacheDirectory]
         case .claudeSupport: [RealUserHome.claudeSupportDirectory]
+        case .developerPackageCache: DeveloperCacheGroup.allCases.map(\.url)
         }
     }
 
@@ -269,6 +277,48 @@ enum AuthorizedRootKind: String, Codable, Sendable {
         case .claudeHome: "Claude home"
         case .claudeSystemCache: "Claude system cache"
         case .claudeSupport: "Claude Application Support"
+        case .developerPackageCache: "Developer Package Cache"
+        }
+    }
+}
+
+enum DeveloperCacheGroup: String, CaseIterable, Identifiable, Sendable {
+    case swiftPM, cocoaPods, carthage, npm, yarn, pnpm, bun
+    var id: String { rawValue }
+
+    var title: String {
+        switch self {
+        case .swiftPM: "Swift Package Manager"
+        case .cocoaPods: "CocoaPods"
+        case .carthage: "Carthage"
+        case .npm: "npm"
+        case .yarn: "Yarn"
+        case .pnpm: "pnpm"
+        case .bun: "Bun"
+        }
+    }
+
+    var url: URL {
+        switch self {
+        case .swiftPM: RealUserHome.swiftPackageCacheDirectory
+        case .cocoaPods: RealUserHome.cocoaPodsCacheDirectory
+        case .carthage: RealUserHome.carthageCacheDirectory
+        case .npm: RealUserHome.npmCacheDirectory
+        case .yarn: RealUserHome.yarnCacheDirectory
+        case .pnpm: RealUserHome.pnpmStoreDirectory
+        case .bun: RealUserHome.bunCacheDirectory
+        }
+    }
+
+    var consequence: String {
+        switch self {
+        case .swiftPM: "Swift packages may need to be fetched and resolved again."
+        case .cocoaPods: "Pods may need to be downloaded again during pod install."
+        case .carthage: "Carthage may need to fetch and rebuild frameworks again."
+        case .npm: "npm may need to download package data again; project lockfiles and node_modules are outside this cleanup."
+        case .yarn: "Yarn may need to download package data again; project lockfiles and node_modules are outside this cleanup."
+        case .pnpm: "pnpm may need to fetch packages again; project files and node_modules are outside this cleanup."
+        case .bun: "Bun may need to download packages again; project files and node_modules are outside this cleanup."
         }
     }
 }
@@ -349,6 +399,7 @@ struct ScanContext: Sendable {
     let claudeIsRunning: Bool
     let disabledAIToolScopes: Set<String>
     let aiLogRetentionDays: Int
+    let developerPackageCacheRoots: [URL]
 
     var hasAIRoots: Bool {
         cursorSupportRoot != nil
@@ -376,7 +427,8 @@ struct ScanContext: Sendable {
         codexIsRunning: Bool = false,
         claudeIsRunning: Bool = false,
         disabledAIToolScopes: Set<String> = [],
-        aiLogRetentionDays: Int = 30
+        aiLogRetentionDays: Int = 30,
+        developerPackageCacheRoots: [URL] = []
     ) {
         self.developerRoot = developerRoot
         self.xcodeCacheRoot = xcodeCacheRoot
@@ -394,6 +446,7 @@ struct ScanContext: Sendable {
         self.claudeIsRunning = claudeIsRunning
         self.disabledAIToolScopes = disabledAIToolScopes
         self.aiLogRetentionDays = aiLogRetentionDays
+        self.developerPackageCacheRoots = developerPackageCacheRoots
     }
 
     func isAIToolScopeEnabled(tool: String, scope: AIToolDataScope) -> Bool {

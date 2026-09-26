@@ -23,6 +23,7 @@ enum BuildSweepTheme {
         case .simulators: Color.srgb(0xBDCFF0)
         case .cachesAndLogs: Color.srgb(0x9EBCE5)
         case .aiTools: Color.srgb(0xB9DCE8)
+        case .developerCaches: Color.srgb(0xD9C7F2)
         case .history: Color.srgb(0xE8EDF3)
         }
     }

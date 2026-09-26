@@ -57,7 +57,7 @@ final class AppModel {
 
     var developerRoot: AuthorizedRoot? { authorizedRoots.first { $0.kind == .developerDirectory } }
     var xcodeCacheRoot: AuthorizedRoot? { authorizedRoots.first { $0.kind == .xcodeCache } }
-    var xcodeAuthorizedRoots: [AuthorizedRoot] { authorizedRoots.filter { !$0.kind.isAI } }
+    var xcodeAuthorizedRoots: [AuthorizedRoot] { authorizedRoots.filter { $0.kind == .developerDirectory || $0.kind == .xcodeCache } }
     var hasAnyAIRoot: Bool { authorizedRoots.contains { $0.kind.isAI } }
     var needsOnboarding: Bool { developerRoot == nil || !onboardingCompleted }
     var selectedItems: [StorageItem] { snapshot.allItems.filter { selectedItemIDs.contains($0.id) } }
@@ -117,6 +117,23 @@ final class AppModel {
         do {
             let root = try await authorizer.requestXcodeCacheDirectory()
             authorizedRoots.removeAll { $0.kind == .xcodeCache }
+            authorizedRoots.append(root)
+            startScan()
+        } catch FolderAuthorizationError.cancelled {
+            return
+        } catch {
+            appMessage = error.localizedDescription
+        }
+    }
+
+    func packageCacheRoot(for group: DeveloperCacheGroup) -> AuthorizedRoot? {
+        authorizedRoots.first { $0.kind == .developerPackageCache && $0.url.canonicalFileURL == group.url.canonicalFileURL }
+    }
+
+    func grantPackageCacheAccess(_ group: DeveloperCacheGroup) async {
+        do {
+            let root = try await authorizer.requestAuthorizedFolder(kind: .developerPackageCache, preferring: group.url)
+            authorizedRoots.removeAll { $0.kind == .developerPackageCache && $0.url.canonicalFileURL == group.url.canonicalFileURL }
             authorizedRoots.append(root)
             startScan()
         } catch FolderAuthorizationError.cancelled {
@@ -234,7 +251,10 @@ final class AppModel {
                     isAIToolScopeEnabled(scope, for: group) ? nil : "\(group.rawValue).\(scope.rawValue)"
                 }
             }),
-            aiLogRetentionDays: aiLogRetentionDays
+            aiLogRetentionDays: aiLogRetentionDays,
+            developerPackageCacheRoots: authorizedRoots
+                .filter { $0.kind == .developerPackageCache }
+                .map(\.url)
         )
         var categories = StorageCategoryID.allCases.filter { $0.isScannable && $0 != .aiTools }
         if context.hasAIRoots {

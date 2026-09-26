@@ -35,6 +35,30 @@ struct SettingsView: View {
                         Task { await model.grantXcodeCacheAccess() }
                     }
                 }
+                Section("Developer package-manager caches") {
+                    Text("Each cache location requires its own approval. Only the exact cache folder you grant is scanned; project folders, lockfiles, and node_modules are excluded.")
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                    ForEach(DeveloperCacheGroup.allCases) { group in
+                        VStack(alignment: .leading, spacing: 6) {
+                            HStack {
+                                VStack(alignment: .leading, spacing: 2) {
+                                    Text(group.title).fontWeight(.medium)
+                                    Text(group.url.path(percentEncoded: false))
+                                        .font(.caption.monospaced()).foregroundStyle(.secondary).textSelection(.enabled)
+                                }
+                                Spacer()
+                                if let root = model.packageCacheRoot(for: group) {
+                                    Button("Forget") { Task { await model.forgetRoot(root) } }
+                                } else {
+                                    Button("Grant…") { Task { await model.grantPackageCacheAccess(group) } }
+                                }
+                            }
+                            Text(group.consequence).font(.caption).foregroundStyle(.secondary)
+                        }
+                        .padding(.vertical, 4)
+                    }
+                }
                 Section("AI tool folders") {
                     Text("Scans cache and logs only; chats and skills are never read.")
                         .font(.caption)
@@ -119,7 +143,7 @@ struct SettingsView: View {
             .formStyle(.grouped)
             .tabItem { Label("Request a Feature", systemImage: "lightbulb") }
         }
-        .frame(width: 590, height: 560)
+        .frame(width: 620, height: 680)
         .scenePadding()
         .buildSweepAppearance()
     }
