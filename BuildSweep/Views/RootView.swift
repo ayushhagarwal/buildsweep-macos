@@ -2,6 +2,7 @@ import SwiftUI
 
 struct RootView: View {
     @Bindable var model: AppModel
+    @Environment(\.openWindow) private var openWindow
 
     var body: some View {
         Group {
@@ -50,7 +51,7 @@ struct RootView: View {
                 }
             }
         }
-        .sheet(isPresented: $model.showingCleanupReview) {
+        .sheet(isPresented: $model.showingCleanupReview, onDismiss: model.cleanupReviewWasDismissed) {
             if let plan = model.preservedPlan {
                 CleanupReviewView(model: model, plan: plan)
                     .buildSweepAppearance()
@@ -67,6 +68,15 @@ struct RootView: View {
             Button("OK", role: .cancel) { model.appMessage = nil }
         } message: {
             Text(model.appMessage ?? "")
+        }
+        .task {
+            model.configureMainWindowOpener { openWindow(id: "main") }
+        }
+        .onChange(of: model.showingCleanupReview) { _, isShowing in
+            if isShowing {
+                openWindow(id: "main")
+                NSApp.activate(ignoringOtherApps: true)
+            }
         }
     }
 

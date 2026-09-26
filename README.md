@@ -21,6 +21,16 @@ The app supports:
 - macOS 14.0 or later
 - Apple silicon (`arm64`) and Intel (`x86_64`)
 
+## Local MCP for AI agents
+
+BuildSweep includes an optional MCP stdio helper for Claude, Codex, and other compatible clients. It is off by default. Enable **Settings → General → Local MCP for AI agents**, then copy the setup snippet into the client yourself. BuildSweep never edits client configuration files.
+
+The app must be open while the client is connected. The agent can check scan status, scan locations already authorized in BuildSweep, list and inspect bounded item summaries, and stage up to 50 items for review. Paths and file contents are not returned to the client. Staging opens BuildSweep's native cleanup review; only a person confirming in that window can move selected items to Trash. The MCP helper has no direct access to the authorized folders and provides no cleanup approval or execution tool.
+
+This feature requires a signed BuildSweep build. The app and helper use the macOS team-prefixed app group `<TeamID>.com.ayush.buildsweep`, which avoids a separate profile registration step for direct distribution. An unsigned local image will not establish the shared app-group container and is not suitable for MCP validation. The helper uses the Model Context Protocol Swift SDK, pinned to 0.12.1.
+
+After building the app, run `python3 script/test_mcp_protocol.py` to smoke-test MCP initialization, tool discovery, bounded schemas, unknown-tool rejection, and stdout framing without connecting to the app.
+
 ## Build and test
 
 Requirements: macOS 14 or later, and Xcode 26 or later.

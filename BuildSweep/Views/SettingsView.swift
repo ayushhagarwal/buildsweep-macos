@@ -11,7 +11,41 @@ struct SettingsView: View {
                         get: { model.launchAtLogin },
                         set: { model.setLaunchAtLogin($0) }
                     ))
-                    Text("BuildSweep does not schedule periodic cleanup or run a background helper.")
+                    Text("BuildSweep never schedules cleanup. The optional MCP helper runs only when an AI client launches it, and it requires BuildSweep to stay open.")
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                }
+                Section("Local MCP for AI agents") {
+                    Toggle("Enable local MCP access", isOn: Binding(
+                        get: { model.mcpEnabled },
+                        set: { model.setMCPEnabled($0) }
+                    ))
+                    LabeledContent("Status", value: model.mcpServiceStatus)
+                    Text("Claude, Codex, and other MCP clients can inspect authorized storage and stage a cleanup review. BuildSweep must stay open. Agents cannot approve or run cleanup; you confirm every plan here.")
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                    Text("Only folders you have already authorized in BuildSweep are available. MCP is local-only and off by default. Setup snippets are copied for you; BuildSweep never edits client configuration files.")
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                    VStack(alignment: .leading, spacing: 8) {
+                        Text("Claude Desktop configuration")
+                            .font(.subheadline.weight(.medium))
+                        Text(claudeMCPConfiguration)
+                            .font(.system(.caption, design: .monospaced))
+                            .textSelection(.enabled)
+                            .frame(maxWidth: .infinity, alignment: .leading)
+                        Button("Copy Claude setup") { copy(claudeMCPConfiguration) }
+                    }
+                    VStack(alignment: .leading, spacing: 8) {
+                        Text("Codex configuration")
+                            .font(.subheadline.weight(.medium))
+                        Text(codexMCPConfiguration)
+                            .font(.system(.caption, design: .monospaced))
+                            .textSelection(.enabled)
+                            .frame(maxWidth: .infinity, alignment: .leading)
+                        Button("Copy Codex setup") { copy(codexMCPConfiguration) }
+                    }
+                    Text("After enabling MCP, restart the client after adding its snippet. If the client cannot connect, open BuildSweep and check that MCP is still enabled.")
                         .font(.caption)
                         .foregroundStyle(.secondary)
                 }
@@ -151,6 +185,31 @@ struct SettingsView: View {
     private func mailURL(subject: String) -> URL {
         let encoded = subject.addingPercentEncoding(withAllowedCharacters: .urlQueryAllowed) ?? subject
         return URL(string: "mailto:support@ayushdev.com?subject=\(encoded)")!
+    }
+
+    private var helperPath: String {
+        Bundle.main.bundleURL.appending(path: "Contents/Library/HelperTools/BuildSweepMCP").path
+    }
+
+    private var claudeMCPConfiguration: String {
+        let command = helperPath.replacingOccurrences(of: "\\", with: "\\\\").replacingOccurrences(of: "\"", with: "\\\"")
+        return """
+        { "mcpServers": { "buildsweep": { "command": "\(command)", "args": [] } } }
+        """
+    }
+
+    private var codexMCPConfiguration: String {
+        let command = helperPath.replacingOccurrences(of: "\\", with: "\\\\").replacingOccurrences(of: "\"", with: "\\\"")
+        return """
+        [mcp_servers.buildsweep]
+        command = "\(command)"
+        args = []
+        """
+    }
+
+    private func copy(_ value: String) {
+        NSPasteboard.general.clearContents()
+        NSPasteboard.general.setString(value, forType: .string)
     }
 
     private func scopeDescription(_ scope: AIToolDataScope, for group: AIToolGroup) -> String {

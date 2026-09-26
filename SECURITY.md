@@ -2,6 +2,14 @@
 
 BuildSweep reads filesystem metadata and moves selected Xcode and AI-tool cache folders to Trash. A bug in path checks, bookmark handling, or cleanup can affect files on the Mac where the app is running.
 
+## MCP boundary
+
+The local MCP service is disabled by default. When enabled, a sandboxed stdio helper talks to the open app through a private Unix-domain socket inside the shared app group. Both processes verify the peer's strict code signature, bundle identifier, and signing team before accepting requests. The app handles a bounded request schema. The helper does not receive security-scoped bookmarks and cannot scan or clean authorized folders on its own.
+
+MCP tools expose scan state and bounded metadata, never absolute paths or file contents. Item IDs are opaque and tied to a scan generation. A cleanup request can only stage currently listed, allowlisted items through the existing planner. It opens the native review UI; no MCP tool can approve or execute cleanup. Disabling MCP closes the listener and cancels an outstanding agent review.
+
+The app and helper use the same macOS team-prefixed app group, `<TeamID>.com.ayush.buildsweep`, so only code signed by that team can use the shared container. The helper is signed before the containing app and is verified separately during packaging.
+
 ## Report privately
 
 Do not open a public GitHub issue for a vulnerability, and do not include exploit details in a pull request.

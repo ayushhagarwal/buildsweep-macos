@@ -55,6 +55,8 @@ final class AppModel {
     var history: [CleanupSessionResult] = []
     var appMessage: String?
     var launchAtLogin = false
+    var mcpEnabled = false
+    var mcpServiceStatus = "Off"
     var onboardingCompleted = false
     var isBootstrapped = false
 
@@ -65,9 +67,15 @@ final class AppModel {
     private let scanCache: ScanCacheStore
     private let loginService: LaunchAtLoginService
     private let defaults: UserDefaults
+    private let mcpServer = MCPAgentSocketServer()
     private let onboardingKey = "onboardingCompleted.v1"
     private let aiLogRetentionKey = "aiLogRetentionDays.v1"
+    private let mcpEnabledKey = "mcpEnabled.v1"
     private var scanTask: Task<Void, Never>?
+    private var mcpItemRegistry = MCPAgentItemRegistry()
+    private var mcpReviewStates: [UUID: MCPReviewState] = [:]
+    private var pendingMCPReviewID: UUID?
+    var openMainWindow: (() -> Void)?
 
     init(
         authorizer: FolderAccessAuthorizer? = nil,
@@ -120,6 +128,7 @@ final class AppModel {
         history = await historyStore.load()
         launchAtLogin = loginService.isEnabled
         onboardingCompleted = defaults.bool(forKey: onboardingKey)
+        mcpEnabled = defaults.bool(forKey: mcpEnabledKey)
 
         if let cached = await scanCache.load(maximumAge: 60 * 60) {
             snapshot = cached
@@ -128,6 +137,7 @@ final class AppModel {
         if developerRoot != nil, snapshot.categories.isEmpty {
             startScan()
         }
+        if mcpEnabled { startMCPService() }
     }
 
     func grantDeveloperAccess() async {
@@ -362,6 +372,44 @@ final class AppModel {
         }
     }
 
+    func setMCPEnabled(_ enabled: Bool) {
+        guard enabled != mcpEnabled else { return }
+        mcpEnabled = enabled
+        defaults.set(enabled, forKey: mcpEnabledKey)
+        if enabled {
+            startMCPService()
+        } else {
+            mcpServer.stop()
+            mcpServiceStatus = "Off"
+            if let pendingMCPReviewID {
+                mcpReviewStates[pendingMCPReviewID] = .cancelled
+                showingCleanupReview = false
+                preservedPlan = nil
+            }
+            pendingMCPReviewID = nil
+        }
+    }
+
+    func configureMainWindowOpener(_ opener: @escaping () -> Void) {
+        openMainWindow = opener
+    }
+
+    func cancelCleanupReview() {
+        showingCleanupReview = false
+        preservedPlan = nil
+        if let pendingMCPReviewID {
+            mcpReviewStates[pendingMCPReviewID] = .cancelled
+            self.pendingMCPReviewID = nil
+        }
+    }
+
+    func cleanupReviewWasDismissed() {
+        guard let pendingMCPReviewID, mcpReviewStates[pendingMCPReviewID] == .waitingForReview else { return }
+        mcpReviewStates[pendingMCPReviewID] = .cancelled
+        self.pendingMCPReviewID = nil
+        preservedPlan = nil
+    }
+
     func prepareCleanup(preset: CleanupPreset) {
         let items = snapshot.allItems.filter(preset.includes)
         guard !items.isEmpty else {
@@ -404,6 +452,13 @@ final class AppModel {
             selectedItemIDs.subtract(result.succeededItems.map(\.itemID))
         }
         preservedPlan = nil
+        if let pendingMCPReviewID {
+            mcpReviewStates[pendingMCPReviewID] = .completed(
+                movedToTrash: result.succeededItems.count,
+                failed: result.failedItems.count
+            )
+            self.pendingMCPReviewID = nil
+        }
         startScan()
     }
 
@@ -480,6 +535,290 @@ final class AppModel {
             if let identifier = application.bundleIdentifier, bundleIDs.contains(identifier) { return true }
             if let name = application.localizedName, names.contains(name) { return true }
             return false
+        }
+    }
+}
+
+private enum MCPReviewState: Equatable {
+    case waitingForReview
+    case cancelled
+    case completed(movedToTrash: Int, failed: Int)
+}
+
+private struct MCPAgentArguments: Decodable {
+    let category: String?
+    let limit: Int?
+    let cursor: String?
+    let itemID: String?
+    let itemIDs: [String]?
+    let snapshotGeneration: String?
+    let reviewID: String?
+}
+
+private struct MCPAgentItemSummary: Encodable {
+    let id: String
+    let name: String
+    let category: String
+    let kind: String
+    let estimatedBytes: Int64
+    let risk: String
+    let action: String
+}
+
+private struct MCPAgentChildSummary: Encodable {
+    let name: String
+    let isDirectory: Bool
+    let isSymbolicLink: Bool
+    let estimatedBytes: Int64?
+    let modifiedAt: Date?
+}
+
+extension AppModel {
+    private func startMCPService() {
+        do {
+            try mcpServer.start { [weak self] request in
+                guard let self else {
+                    return MCPBridgeResponse(id: request.id, result: nil, error: "BuildSweep is unavailable.")
+                }
+                return await self.handleMCPRequest(request)
+            }
+            mcpServiceStatus = "Enabled · waiting for a local client"
+        } catch {
+            mcpServiceStatus = "Unavailable · \(error.localizedDescription)"
+        }
+    }
+
+    private func handleMCPRequest(_ request: MCPBridgeRequest) async -> MCPBridgeResponse {
+        guard mcpEnabled else {
+            return MCPBridgeResponse(id: request.id, result: nil, error: "MCP is disabled in BuildSweep Settings.")
+        }
+        do {
+            let arguments = try JSONDecoder().decode(MCPAgentArguments.self, from: Data(request.arguments.utf8))
+            let value: Any
+            switch request.operation {
+            case "status": value = agentStatus()
+            case "scan":
+                guard developerRoot != nil else { throw MCPAgentError.onboardingRequired }
+                if case .scanning = scanState {} else { startScan() }
+                value = agentStatus()
+            case "list": value = try agentList(arguments)
+            case "inspect": value = try await agentInspect(arguments)
+            case "prepare": value = try prepareAgentCleanup(arguments)
+            case "cleanupStatus": value = try agentCleanupStatus(arguments)
+            default: throw MCPAgentError.unknownOperation
+            }
+            let data = try JSONSerialization.data(withJSONObject: value, options: [.sortedKeys, .fragmentsAllowed])
+            return MCPBridgeResponse(id: request.id, result: String(decoding: data, as: UTF8.self), error: nil)
+        } catch {
+            return MCPBridgeResponse(id: request.id, result: nil, error: error.localizedDescription)
+        }
+    }
+
+    private func agentStatus() -> [String: Any] {
+        let scanDescription: String
+        switch scanState {
+        case .idle: scanDescription = "not_scanned"
+        case .scanning(let completed, let total): scanDescription = "scanning \(completed) of \(total) categories"
+        case .complete: scanDescription = "complete"
+        case .failed: scanDescription = "failed"
+        }
+        return [
+            "enabled": mcpEnabled,
+            "service": mcpServiceStatus,
+            "appOpen": true,
+            "onboardingComplete": !needsOnboarding,
+            "scanState": scanDescription,
+            "scanGeneration": snapshot.generationID.uuidString,
+            "scanCompletedAt": snapshot.completedAt?.ISO8601Format() as Any? ?? NSNull(),
+            "scanAgeSeconds": snapshot.completedAt.map { max(0, Int(Date.now.timeIntervalSince($0))) } as Any? ?? NSNull(),
+            "authorizedRootCount": authorizedRoots.count,
+            "categories": StorageCategoryID.allCases.filter(\.isScannable).map { category in
+                let result = snapshot.categories[category]
+                return [
+                    "id": category.rawValue,
+                    "name": category.title,
+                    "status": result.map { $0.status.rawValue } ?? "not_scanned",
+                    "itemCount": result?.items.count ?? 0,
+                    "estimatedBytes": result?.totalSize ?? 0,
+                    "warningCount": result?.warnings.count ?? 0
+                ] as [String: Any]
+            }
+        ]
+    }
+
+    private func agentList(_ arguments: MCPAgentArguments) throws -> [String: Any] {
+        guard case .complete = scanState, let completedAt = snapshot.completedAt else {
+            throw MCPAgentError.scanNotReady
+        }
+        if Date.now.timeIntervalSince(completedAt) > 60 * 60 { throw MCPAgentError.scanStale }
+        mcpItemRegistry.beginGeneration(snapshot.generationID)
+        let category: StorageCategoryID?
+        if let rawCategory = arguments.category {
+            guard let parsed = StorageCategoryID(rawValue: rawCategory), parsed.isScannable else {
+                throw MCPAgentError.invalidCategory
+            }
+            category = parsed
+        } else {
+            category = nil
+        }
+        let items = snapshot.allItems.filter { category == nil || $0.category == category }
+            .sorted {
+                let nameOrder = $0.displayName.localizedStandardCompare($1.displayName)
+                if nameOrder != .orderedSame { return nameOrder == .orderedAscending }
+                if $0.category != $1.category { return $0.category.rawValue < $1.category.rawValue }
+                return $0.id < $1.id
+            }
+        let categoryCursorKey = category?.rawValue ?? "all"
+        let offset: Int
+        if let cursor = arguments.cursor {
+            let components = cursor.split(separator: ":", omittingEmptySubsequences: false)
+            guard components.count == 3,
+                  components[0] == snapshot.generationID.uuidString,
+                  components[1] == categoryCursorKey,
+                  let parsedOffset = Int(components[2]), parsedOffset >= 0,
+                  parsedOffset <= items.count else {
+                throw MCPAgentError.invalidCursor
+            }
+            offset = parsedOffset
+        } else {
+            offset = 0
+        }
+        let limit = MCPAgentItemRegistry.boundedPageSize(arguments.limit)
+        let page = Array(items.dropFirst(offset).prefix(limit))
+        let summaries = page.map { item -> MCPAgentItemSummary in
+            let opaqueID = mcpItemRegistry.opaqueID(for: item.id, generation: snapshot.generationID)
+            return MCPAgentItemSummary(
+                id: opaqueID,
+                name: item.displayName,
+                category: item.category.rawValue,
+                kind: item.kind.rawValue,
+                estimatedBytes: item.size,
+                risk: item.risk.rawValue,
+                action: item.action.rawValue
+            )
+        }
+        return [
+            "generation": snapshot.generationID.uuidString,
+            "items": try jsonObject(summaries),
+            "nextCursor": offset + page.count < items.count ? "\(snapshot.generationID.uuidString):\(categoryCursorKey):\(offset + page.count)" as Any : NSNull(),
+            "totalCount": items.count
+        ]
+    }
+
+    private func agentInspect(_ arguments: MCPAgentArguments) async throws -> [String: Any] {
+        guard case .complete = scanState, let completedAt = snapshot.completedAt else { throw MCPAgentError.scanNotReady }
+        if Date.now.timeIntervalSince(completedAt) > 60 * 60 { throw MCPAgentError.scanStale }
+        guard let opaqueID = arguments.itemID,
+              let storageID = mcpItemRegistry.itemID(for: opaqueID, generation: snapshot.generationID),
+              let item = snapshot.allItems.first(where: { $0.id == storageID }) else { throw MCPAgentError.staleItem }
+        var children: [MCPAgentChildSummary] = []
+        var childCount = 0
+        if let url = item.url {
+            let inspection = try await DirectorySizer().inspectImmediateChildren(of: url, limit: MCPAgentItemRegistry.maximumInspectionChildren)
+            childCount = inspection.totalCount
+            children = inspection.children.map {
+                MCPAgentChildSummary(name: String($0.name.prefix(160)), isDirectory: $0.isDirectory,
+                                     isSymbolicLink: $0.isSymbolicLink, estimatedBytes: $0.size, modifiedAt: $0.modifiedAt)
+            }
+        }
+        let safeMetadataKeys: Set<String> = [
+            "Workspace", "Folder", "Bundle ID", "Signing", "dSYM", "Platform", "Newest for platform",
+            "Runtime", "State", "Availability", "Version", "Devices", "Storage", "Management",
+            "Tool", "Scope", "Effect", "Cleanup", "Reason"
+        ]
+        let safeMetadata = item.metadata
+            .filter { safeMetadataKeys.contains($0.key) && !$0.value.hasPrefix("/") }
+            .sorted { $0.key < $1.key }
+            .prefix(20)
+            .reduce(into: [String: String]()) {
+                $0[String($1.key.prefix(80))] = String($1.value.prefix(160))
+            }
+        return [
+            "id": opaqueID, "name": item.displayName, "category": item.category.rawValue,
+            "kind": item.kind.rawValue, "estimatedBytes": item.size,
+            "modifiedAt": item.modifiedAt?.ISO8601Format() as Any? ?? NSNull(),
+            "risk": item.risk.rawValue, "action": item.action.rawValue,
+            "metadata": safeMetadata,
+            "children": try jsonObject(children), "childCount": childCount,
+            "childrenTruncated": childCount > children.count
+        ]
+    }
+
+    private func prepareAgentCleanup(_ arguments: MCPAgentArguments) throws -> [String: Any] {
+        guard pendingMCPReviewID == nil else { throw MCPAgentError.reviewAlreadyOpen }
+        guard case .complete = scanState else { throw MCPAgentError.scanNotReady }
+        guard let completedAt = snapshot.completedAt, Date.now.timeIntervalSince(completedAt) <= 60 * 60 else {
+            throw MCPAgentError.scanStale
+        }
+        guard let generation = arguments.snapshotGeneration,
+              generation == snapshot.generationID.uuidString,
+              let opaqueIDs = arguments.itemIDs, !opaqueIDs.isEmpty,
+              opaqueIDs.count <= MCPAgentItemRegistry.maximumCleanupItems,
+              Set(opaqueIDs).count == opaqueIDs.count else { throw MCPAgentError.invalidSelection }
+        let itemIDs = try opaqueIDs.map { opaqueID -> String in
+            guard let storageID = mcpItemRegistry.itemID(for: opaqueID, generation: snapshot.generationID),
+                  let item = snapshot.allItems.first(where: { $0.id == storageID }),
+                  item.action == .trash else { throw MCPAgentError.itemNotEligible }
+            return storageID
+        }
+        let plan = try planner.makePlan(
+            from: CleanupSelection(itemIDs: Set(itemIDs)),
+            snapshot: snapshot,
+            roots: authorizedRoots
+        )
+        let reviewID = UUID()
+        mcpReviewStates[reviewID] = .waitingForReview
+        if mcpReviewStates.count > 20 {
+            for key in Array(mcpReviewStates.keys) where key != pendingMCPReviewID { mcpReviewStates.removeValue(forKey: key) }
+        }
+        pendingMCPReviewID = reviewID
+        selectedItemIDs = Set(itemIDs)
+        preservedPlan = plan
+        openMainWindow?()
+        NSApp.activate(ignoringOtherApps: true)
+        showingCleanupReview = true
+        return [
+            "reviewID": reviewID.uuidString,
+            "status": "waiting_for_person_in_buildsweep",
+            "itemCount": plan.items.count,
+            "estimatedBytes": plan.selectedSize,
+            "message": "BuildSweep is showing this exact plan. A person must confirm it in the app; this MCP request cannot approve or execute cleanup."
+        ]
+    }
+
+    private func agentCleanupStatus(_ arguments: MCPAgentArguments) throws -> [String: Any] {
+        guard let rawID = arguments.reviewID, let id = UUID(uuidString: rawID),
+              let state = mcpReviewStates[id] else { throw MCPAgentError.unknownReview }
+        switch state {
+        case .waitingForReview: return ["reviewID": rawID, "status": "waiting_for_person_in_buildsweep"]
+        case .cancelled: return ["reviewID": rawID, "status": "cancelled"]
+        case .completed(let moved, let failed): return ["reviewID": rawID, "status": "completed", "movedToTrash": moved, "failed": failed]
+        }
+    }
+
+    private func jsonObject<T: Encodable>(_ value: T) throws -> Any {
+        let data = try JSONEncoder().encode(value)
+        return try JSONSerialization.jsonObject(with: data, options: [.fragmentsAllowed])
+    }
+}
+
+private enum MCPAgentError: LocalizedError {
+    case onboardingRequired, scanNotReady, scanStale, invalidCategory, invalidCursor
+    case staleItem, invalidSelection, itemNotEligible, unknownReview, reviewAlreadyOpen, unknownOperation
+
+    var errorDescription: String? {
+        switch self {
+        case .onboardingRequired: "Complete BuildSweep onboarding and authorize the Developer folder first."
+        case .scanNotReady: "No completed scan is available. Call scan_storage, then check get_status before listing items."
+        case .scanStale: "The scan is more than one hour old. Scan again before continuing."
+        case .invalidCategory: "Unknown or non-scannable category."
+        case .invalidCursor: "The page cursor is invalid or belongs to an older scan."
+        case .staleItem: "The item ID is unknown or belongs to an older scan. List items again."
+        case .invalidSelection: "The cleanup selection is empty, too large, duplicated, or belongs to an older scan."
+        case .itemNotEligible: "At least one item is not eligible for cleanup. BuildSweep did not stage a plan."
+        case .unknownReview: "The review ID is unknown or has expired."
+        case .reviewAlreadyOpen: "A cleanup review is already open in BuildSweep. Finish or cancel it before staging another plan."
+        case .unknownOperation: "Unknown local MCP operation."
         }
     }
 }

@@ -97,7 +97,10 @@ struct CleanupReviewView: View {
                         .font(.callout)
                         .foregroundStyle(.secondary)
                     Spacer()
-                    Button("Cancel") { dismiss() }
+                    Button("Cancel") {
+                        model.cancelCleanupReview()
+                        dismiss()
+                    }
                     Button(executing ? "Cleaning…" : "Confirm Cleanup") {
                         executing = true
                         Task { await model.executePreservedCleanup() }

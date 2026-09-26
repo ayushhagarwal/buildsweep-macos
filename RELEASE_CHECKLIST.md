@@ -14,7 +14,14 @@ Supported systems for a release candidate:
 - [x] Project-local clean Release build passes for `arm64` and `x86_64`.
 - [x] Unit tests pass on the macOS version used to cut the release.
 - [ ] UI launch test passes from the signed release candidate, not from an older local build.
-- [x] No external package, network entitlement, helper, or service is present.
+- [ ] Resolve and audit the pinned Model Context Protocol Swift SDK 0.12.1 and its transitive dependencies.
+- [ ] Confirm the app and helper both receive the same macOS team-prefixed app-group entitlement (`<TeamID>.com.ayush.buildsweep`).
+- [ ] Verify the sandboxed helper is nested at `Contents/Library/HelperTools/BuildSweepMCP`, signed before the app, hardened, and included in the notarized DMG.
+- [ ] Verify the helper signature is rejected unless its identifier and Apple-issued signature match the expected BuildSweep helper.
+- [x] Smoke-test MCP initialization, tool discovery, bounded selection schema, unknown-tool rejection, and stdout framing with `python3 script/test_mcp_protocol.py`.
+- [ ] Exercise malformed/oversized IPC requests, stale item IDs, and app/helper disconnects against a signed app.
+- [ ] Verify that only BuildSweep's native review confirmation can run cleanup; disabling MCP cancels pending agent review.
+- [ ] Smoke-test setup and complete review flow with Claude Desktop/Claude Code, Codex, and a generic stdio MCP client.
 - [x] Tag-triggered signing and notarization workflow is implemented.
 - [ ] Configure the five signing/notarization repository secrets listed in the README, then complete one successful signed release run.
 
@@ -39,9 +46,10 @@ Supported systems for a release candidate:
 
 Direct distribution needs a Developer ID Application signature and Apple notarization. An ad-hoc or development signature is not a public download.
 
-- [ ] Sign the Release `.app` with a Developer ID Application certificate, Hardened Runtime, and only the sandbox entitlements in `BuildSweep/BuildSweep.entitlements`.
+- [ ] Sign the nested MCP helper with Developer ID, Hardened Runtime, and `BuildSweepMCP/BuildSweepMCP.entitlements`, then sign the Release `.app` with the app-group and App Sandbox entitlements in `BuildSweep/BuildSweep.entitlements`.
 - [ ] `codesign --verify --deep --strict --verbose=2 BuildSweep.app` passes.
-- [ ] `codesign -dvvv --entitlements :- BuildSweep.app` shows only App Sandbox and user-selected read/write access.
+- [ ] `codesign -dvvv --entitlements :- BuildSweep.app` shows only App Sandbox, user-selected read/write access, app-group access, and the local socket server entitlement.
+- [ ] The nested helper's entitlements show App Sandbox, the shared app group, and local socket client access; it has no user-selected folder access.
 - [ ] Submit the app or disk image with `xcrun notarytool submit`, wait until the status is Accepted, and staple the ticket with `xcrun stapler staple`.
 - [ ] `spctl --assess --type execute --verbose BuildSweep.app` reports accepted.
 - [ ] The disk image opens, the app copies out of it, and Gatekeeper launches it without an “unidentified developer” warning.
