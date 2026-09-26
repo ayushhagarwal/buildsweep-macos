@@ -155,6 +155,7 @@ private struct StorageItemRow: View {
     @State private var childInspection: StorageChildrenInspection?
     @State private var inspectionError: String?
     @State private var isInspecting = false
+    @State private var inspectionRoot: StorageItem?
 
     var body: some View {
         VStack(alignment: .leading, spacing: 10) {
@@ -212,6 +213,13 @@ private struct StorageItemRow: View {
                         .font(.caption)
                     }
                     childContents
+                    if item.url != nil && item.kind != .simulatorRuntime {
+                        Button("Inspect folder contents…") {
+                            inspectionRoot = item
+                        }
+                        .buttonStyle(.link)
+                        .help("Browse names, allocated sizes, and modification dates without opening file contents.")
+                    }
                     HStack {
                         Button("Reveal in Finder") { model.reveal(item) }.disabled(item.url == nil)
                         Button("Copy Path") { model.copyPath(item) }.disabled(item.url == nil)
@@ -242,6 +250,12 @@ private struct StorageItemRow: View {
         .contextMenu {
             Button("Reveal in Finder") { model.reveal(item) }.disabled(item.url == nil)
             Button("Copy Path") { model.copyPath(item) }.disabled(item.url == nil)
+        }
+        .sheet(item: $inspectionRoot) { root in
+            if let url = root.url {
+                StorageInspectionBrowser(url: url, title: root.displayName)
+                    .frame(minWidth: 620, minHeight: 480)
+            }
         }
     }
 
@@ -300,5 +314,91 @@ private struct StorageItemRow: View {
         if item.lastUsedAt != nil { return "Last accessed" }
         if item.modifiedAt != nil { return "Modified" }
         return "Date unavailable"
+    }
+}
+
+private struct StorageInspectionBrowser: View {
+    let url: URL
+    let title: String
+    @Environment(\.dismiss) private var dismiss
+    @State private var inspection: StorageChildrenInspection?
+    @State private var errorMessage: String?
+    @State private var isLoading = true
+
+    var body: some View {
+        NavigationStack {
+            Group {
+                if isLoading {
+                    ProgressView("Measuring folder contents…")
+                        .frame(maxWidth: .infinity, maxHeight: .infinity)
+                } else if let errorMessage {
+                    ContentUnavailableView("Couldn’t inspect this folder", systemImage: "folder.badge.questionmark", description: Text(errorMessage))
+                } else if let inspection, inspection.children.isEmpty {
+                    ContentUnavailableView("No contents", systemImage: "folder", description: Text("This folder is empty."))
+                } else if let inspection {
+                    List(inspection.children) { child in
+                        if child.isDirectory {
+                            NavigationLink {
+                                StorageInspectionBrowser(url: child.url, title: child.name)
+                            } label: {
+                                childRow(child)
+                            }
+                        } else {
+                            childRow(child)
+                        }
+                    }
+                    .listStyle(.inset)
+                }
+            }
+            .navigationTitle(title)
+            .toolbar {
+                ToolbarItem(placement: .automatic) {
+                    Button("Done") { dismiss() }
+                }
+            }
+            .safeAreaInset(edge: .bottom) {
+                VStack(alignment: .leading, spacing: 3) {
+                    Text(url.path(percentEncoded: false)).font(.caption.monospaced()).lineLimit(2).textSelection(.enabled)
+                    Text("Read-only inspection. BuildSweep shows file names and metadata, never file contents. Sizes are allocated-space estimates.")
+                        .font(.caption2).foregroundStyle(.secondary)
+                }
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .padding(12)
+                .background(.bar)
+            }
+        }
+        .task(id: url) {
+            isLoading = true
+            errorMessage = nil
+            do {
+                inspection = try await DirectorySizer().inspectImmediateChildren(of: url, limit: 200)
+            } catch is CancellationError {
+                return
+            } catch {
+                errorMessage = error.localizedDescription
+            }
+            isLoading = false
+        }
+    }
+
+    private func childRow(_ child: StorageChildSummary) -> some View {
+        HStack(spacing: 10) {
+            Image(systemName: child.isDirectory ? "folder" : "doc")
+                .foregroundStyle(.secondary)
+                .frame(width: 20)
+            VStack(alignment: .leading, spacing: 3) {
+                Text(child.name).lineLimit(1)
+                Text(child.modifiedAt.map { "Modified \($0.formatted(date: .abbreviated, time: .shortened))" } ?? "Date unavailable")
+                    .font(.caption2).foregroundStyle(.tertiary)
+            }
+            Spacer()
+            Text(child.size.map(BuildSweepFormatters.bytes) ?? "Unavailable")
+                .monospacedDigit().foregroundStyle(.secondary)
+        }
+        .padding(.vertical, 3)
+        .contextMenu {
+            Button("Reveal in Finder") { NSWorkspace.shared.activateFileViewerSelecting([child.url]) }
+            Button("Copy Path") { NSPasteboard.general.clearContents(); NSPasteboard.general.setString(child.url.path, forType: .string) }
+        }
     }
 }
