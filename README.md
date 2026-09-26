@@ -25,6 +25,23 @@ The Run script builds into project-local `DerivedData`. Its default local build 
 
 The app is free. It does not use StoreKit, a paywall, or a license key.
 
+## Releases
+
+Version 1.0.0 is the first public release. Tags use `vMAJOR.MINOR.PATCH`. The app's short version is `CFBundleShortVersionString` in `BuildSweep/Info.plist` (currently `1.0.0`). The build number is `CFBundleVersion`.
+
+The downloadable file is `BuildSweep-<version>.dmg`. It supports:
+
+- macOS 14.0 or later
+- Apple silicon (`arm64`) and Intel (`x86_64`)
+
+```bash
+./script/package_dmg.sh
+```
+
+The script builds a universal Release app. It signs with a Developer ID Application certificate when one is installed, or when `CODESIGN_IDENTITY` names one. Set `NOTARY_KEYCHAIN_PROFILE` to a `notarytool` keychain profile to submit the disk image and staple the ticket. That signature and notarization step is what gives a normal Gatekeeper install. `ALLOW_UNSIGNED=1` writes a local image for testing only; Gatekeeper will not treat it as a public download.
+
+See `RELEASE_CHECKLIST.md` before publishing a tag.
+
 ## Safety model
 
 - Scanning reads Xcode metadata plists and filesystem metadata only.

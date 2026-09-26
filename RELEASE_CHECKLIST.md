@@ -43,7 +43,7 @@ Direct distribution needs a Developer ID Application signature and Apple notariz
 - [ ] Submit the app or disk image with `xcrun notarytool submit`, wait until the status is Accepted, and staple the ticket with `xcrun stapler staple`.
 - [ ] `spctl --assess --type execute --verbose BuildSweep.app` reports accepted.
 - [ ] The disk image opens, the app copies out of it, and Gatekeeper launches it without an “unidentified developer” warning.
-- [ ] Publish the stapled `BuildSweep-<version>.dmg` with the git tag for that version.
+- [ ] Run `./script/package_dmg.sh` with `NOTARY_KEYCHAIN_PROFILE` set, then publish the stapled `BuildSweep-<version>.dmg` together with the git tag for that version.
 
 ## Trust
 

@@ -131,7 +131,7 @@ app_settings = {
   "CODE_SIGN_STYLE" => "Automatic", "CURRENT_PROJECT_VERSION" => "1",
   "ENABLE_APP_SANDBOX" => "YES",
   "ENABLE_HARDENED_RUNTIME" => "YES", "GENERATE_INFOPLIST_FILE" => "NO",
-  "INFOPLIST_FILE" => "BuildSweep/Info.plist", "MARKETING_VERSION" => "1.0",
+  "INFOPLIST_FILE" => "BuildSweep/Info.plist", "MARKETING_VERSION" => "1.0.0",
   "PRODUCT_BUNDLE_IDENTIFIER" => "com.ayush.buildsweep", "PRODUCT_NAME" => "$(TARGET_NAME)",
   "SWIFT_EMIT_LOC_STRINGS" => "YES", "SWIFT_VERSION" => "5.0"
 }
