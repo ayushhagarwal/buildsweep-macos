@@ -26,7 +26,7 @@ That script builds a Debug app into project-local `DerivedData` with signing dis
 
 The script runs the `BuildSweep` scheme with `CODE_SIGNING_ALLOWED=NO`. Unit tests cover path safety, scanning, and cleanup planning. The UI launch test is included in that script. On an unsigned build it can be killed before it connects, and on an ad-hoc signed build it has failed to find the onboarding and overview labels. See `TEST_REPORT.md`.
 
-GitHub Actions runs `BuildSweepTests` only, on `macos-26` and `macos-15`, also with signing disabled. It does not sign, notarize, or package a disk image.
+GitHub Actions runs `BuildSweepTests` only, on `macos-26` and `macos-15`, with signing disabled. The tag-triggered release workflow is separate: it uses repository Actions secrets to sign and notarize a universal disk image, then publishes a GitHub Release only after validation succeeds. Do not use unsigned test artifacts as public downloads.
 
 ## Changes that are welcome
 

@@ -15,6 +15,8 @@ Supported systems for a release candidate:
 - [x] Unit tests pass on the macOS version used to cut the release.
 - [ ] UI launch test passes from the signed release candidate, not from an older local build.
 - [x] No external package, network entitlement, helper, or service is present.
+- [x] Tag-triggered signing and notarization workflow is implemented.
+- [ ] Configure the five signing/notarization repository secrets listed in the README, then complete one successful signed release run.
 
 ## Safety
 
@@ -50,3 +52,4 @@ Direct distribution needs a Developer ID Application signature and Apple notariz
 - [x] Review the privacy manifest in `BuildSweep/PrivacyInfo.xcprivacy`.
 - [ ] Privacy and support pages are live at the production domain, or the README states that they are not yet live.
 - [ ] The disk image and tag contain no credentials, provisioning profiles, or private notes.
+- [ ] Add current product screenshots to the README or project website before promoting the release broadly.

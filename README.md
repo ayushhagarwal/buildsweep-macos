@@ -34,7 +34,9 @@ Or open `BuildSweep.xcodeproj`, select the `BuildSweep` scheme and `My Mac`, and
 
 The run script writes a Debug build to project-local `DerivedData` and disables signing so compilation does not need a certificate. Bookmark, sandbox, and Simulator checks need an automatically signed Xcode build.
 
-`./script/package_dmg.sh` builds the universal Release app. A public disk image is signed with a Developer ID Application certificate, notarized, stapled, and checked with `spctl`. The script fails if `NOTARY_KEYCHAIN_PROFILE` is missing or if notarization or Gatekeeper assessment fails. `ALLOW_UNSIGNED=1` writes a local test image only. Signing and notarization secrets stay off ordinary CI. See `RELEASE_CHECKLIST.md`.
+`./script/package_dmg.sh` builds the universal Release app. A public disk image is signed with a Developer ID Application certificate, notarized, stapled, and checked with `spctl`. The script fails if `NOTARY_KEYCHAIN_PROFILE` is missing or if notarization or Gatekeeper assessment fails. `ALLOW_UNSIGNED=1` writes a local test image only.
+
+Pushing a matching `v<version>` tag runs the signed release workflow. Configure these repository Actions secrets first: `DEVELOPER_ID_CERTIFICATE_P12_BASE64`, `DEVELOPER_ID_CERTIFICATE_PASSWORD`, `NOTARY_API_KEY_BASE64`, `NOTARY_API_KEY_ID`, and `NOTARY_API_ISSUER_ID`. The workflow publishes a GitHub Release only after signing, notarization, stapling, and Gatekeeper checks succeed. See `RELEASE_CHECKLIST.md` before creating a public tag.
 
 ## Known limitations
 
@@ -42,11 +44,14 @@ The run script writes a Debug build to project-local `DerivedData` and disables 
 - SwiftUI Preview deletion and Simulator device deletion stay inspection-only until `SANDBOX_FEASIBILITY.md` passes on a signed build.
 - Simulator runtimes are listed only. Remove them in Xcode Settings › Components.
 - Cursor, Codex, and Claude caches are optional, are not preselected, and are refused while that app is running.
+- Swift Package Manager, CocoaPods, Carthage, npm, Yarn, pnpm, and Bun caches require separate folder approval in Settings and are not preselected. They may need to be downloaded or rebuilt again after moving to Trash.
+- The read-only developer storage map shows at most the first 200 items in each folder, alphabetically. Its mapped byte total covers only those shown items; folder size estimates use allocated file sizes.
 - The UI launch test does not currently pass on an unsigned or ad-hoc build. Details are in `TEST_REPORT.md`.
 
 ## Safety model
 
 - Optional AI Tools cleanup is a Settings grant for Cursor, Codex, and Claude. It scans allowlisted cache and log folders only: never chats, skills, auth, sessions, or project trees.
+- Optional package-cache cleanup requires a separate user-selected grant for each exact package-manager cache directory. It does not include project folders, lockfiles, or `node_modules`.
 - File cleanup always routes exact, revalidated URLs through `FileManager.trashItem`.
 - Cleanup rejects broad roots, tool homes, source or project paths, unknown category shapes, symlinks, and paths outside authorized roots.
 
