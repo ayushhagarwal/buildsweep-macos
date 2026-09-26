@@ -40,3 +40,9 @@ No `.storekit` configuration is included. Create the production IAP in App Store
 
 See `RELEASE_CHECKLIST.md`, `SANDBOX_FEASIBILITY.md`, and `STOREKIT_HANDOFF.md` before distribution.
 
+## License
+
+BuildSweep is released under the [MIT License](LICENSE).
+
+The app icon in `BuildSweep/Assets.xcassets` and the concept artwork in `Design/AppIconConcepts` were created for this project and are covered by the same license. The repository does not include third-party code, fonts, or artwork.
+
