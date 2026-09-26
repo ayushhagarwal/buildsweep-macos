@@ -17,7 +17,7 @@ final class ScannerTests: XCTestCase {
         XCTAssertEqual(snapshot.items.count, 1)
         XCTAssertEqual(snapshot.items.first?.displayName, "Atlas")
         XCTAssertEqual(snapshot.items.first?.risk, .regenerates)
-        XCTAssertEqual(snapshot.items.first?.isDefaultSelected, true)
+        XCTAssertEqual(snapshot.items.first?.isDefaultSelected, false)
     }
 
     func testArchiveParsingPreservesImportantRisk() async throws {
@@ -73,7 +73,7 @@ final class ScannerTests: XCTestCase {
         XCTAssertEqual(snapshot.items.map(\.displayName), ["Cursor Cache"])
         XCTAssertEqual(snapshot.items.first?.kind, .cursorCache)
         XCTAssertEqual(snapshot.items.first?.risk, .regenerates)
-        XCTAssertTrue(snapshot.items.first?.isDefaultSelected ?? false)
+        XCTAssertFalse(snapshot.items.first?.isDefaultSelected ?? true)
         XCTAssertFalse(snapshot.items.contains { $0.displayName.contains("skills") })
     }
 
