@@ -5,17 +5,20 @@ actor XcodeStorageScanner: StorageScanner {
     private let fileManager: FileManager
     private let sizer: DirectorySizer
     private let simulatorController: SimulatorControlling
+    private let developerHome: URL
 
     init(
         category: StorageCategoryID,
         fileManager: FileManager = .default,
         sizer: DirectorySizer = DirectorySizer(),
-        simulatorController: SimulatorControlling = SimctlController()
+        simulatorController: SimulatorControlling = SimctlController(),
+        developerHome: URL = RealUserHome.directory
     ) {
         self.category = category
         self.fileManager = fileManager
         self.sizer = sizer
         self.simulatorController = simulatorController
+        self.developerHome = developerHome
     }
 
     func scan(in context: ScanContext) async throws -> StorageCategorySnapshot {
@@ -238,7 +241,7 @@ actor XcodeStorageScanner: StorageScanner {
         var items: [StorageItem] = []
         for group in DeveloperCacheGroup.allCases {
             try Task.checkCancellation()
-            let expected = group.url.canonicalFileURL
+            let expected = group.url(home: developerHome).canonicalFileURL
             guard let root = context.developerPackageCacheRoots.first(where: { $0.canonicalFileURL == expected }),
                   fileManager.fileExists(atPath: root.path) else { continue }
             let values = try? root.resourceValues(forKeys: [.contentModificationDateKey, .isSymbolicLinkKey])

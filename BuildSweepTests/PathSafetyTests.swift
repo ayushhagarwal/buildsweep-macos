@@ -133,4 +133,36 @@ final class PathSafetyTests: XCTestCase {
         let plan = try DefaultCleanupPlanner().makePlan(from: CleanupSelection(itemIDs: [item.id]), snapshot: snapshot, roots: [authorized])
         XCTAssertEqual(plan.items.first?.authorizedRoot.canonicalFileURL, root.canonicalFileURL)
     }
+
+    func testPackageCachePolicyAllowsOnlyEachExactCacheRoot() throws {
+        let home = fixtureRoot.appending(path: "fixture-home", directoryHint: .isDirectory)
+        let policy = CleanupPathPolicy(developerHome: home)
+
+        for group in DeveloperCacheGroup.allCases {
+            let cache = group.url(home: home)
+            try FileManager.default.createDirectory(at: cache, withIntermediateDirectories: true)
+            let item = StorageItem(
+                category: .developerCaches,
+                kind: .packageManagerCache,
+                displayName: "\(group.title) cache",
+                url: cache,
+                size: 1,
+                risk: .redownloads,
+                action: .trash
+            )
+            XCTAssertEqual(try policy.validate(item, inside: cache), cache.canonicalFileURL, "\(group.title) cache should be allowlisted")
+        }
+
+        let parent = DeveloperCacheGroup.npm.url(home: home).deletingLastPathComponent()
+        let forgedItem = StorageItem(
+            category: .developerCaches,
+            kind: .packageManagerCache,
+            displayName: "npm parent",
+            url: parent,
+            size: 1,
+            risk: .redownloads,
+            action: .trash
+        )
+        XCTAssertThrowsError(try policy.validate(forgedItem, inside: parent))
+    }
 }

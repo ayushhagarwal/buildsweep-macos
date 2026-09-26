@@ -95,4 +95,29 @@ final class ScannerTests: XCTestCase {
         XCTAssertFalse(snapshot.items.first?.isDefaultSelected ?? true)
         XCTAssertFalse(snapshot.warnings.isEmpty)
     }
+
+    func testPackageCacheScannerIncludesOnlyIndividuallyAuthorizedLocation() async throws {
+        let fixture = FileManager.default.temporaryDirectory.appending(path: UUID().uuidString)
+        defer { try? FileManager.default.removeItem(at: fixture) }
+        let home = fixture.appending(path: "home", directoryHint: .isDirectory)
+        let npmCache = DeveloperCacheGroup.npm.url(home: home)
+        let yarnCache = DeveloperCacheGroup.yarn.url(home: home)
+        try FileManager.default.createDirectory(at: npmCache, withIntermediateDirectories: true)
+        try FileManager.default.createDirectory(at: yarnCache, withIntermediateDirectories: true)
+        try Data(repeating: 1, count: 4096).write(to: npmCache.appending(path: "content.bin"))
+        try Data(repeating: 2, count: 4096).write(to: yarnCache.appending(path: "content.bin"))
+
+        let context = ScanContext(
+            developerRoot: fixture,
+            generationID: UUID(),
+            xcodeIsRunning: false,
+            developerPackageCacheRoots: [npmCache]
+        )
+        let snapshot = try await XcodeStorageScanner(category: .developerCaches, developerHome: home).scan(in: context)
+
+        XCTAssertEqual(snapshot.items.map(\.displayName), ["npm cache"])
+        XCTAssertEqual(snapshot.items.first?.url?.canonicalFileURL, npmCache.canonicalFileURL)
+        XCTAssertEqual(snapshot.items.first?.risk, .redownloads)
+        XCTAssertFalse(snapshot.items.first?.isDefaultSelected ?? true)
+    }
 }

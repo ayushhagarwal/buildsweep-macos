@@ -29,10 +29,15 @@ enum CleanupPolicyError: LocalizedError, Equatable {
 }
 
 struct CleanupPathPolicy: Sendable {
+    private let developerHome: URL
     private let forbiddenExtensions: Set<String> = ["xcodeproj", "xcworkspace", "git"]
     private let forbiddenNames: Set<String> = [
         "UserData", "Provisioning Profiles", "Accounts", "Xcode Cloud", "Products"
     ]
+
+    init(developerHome: URL = RealUserHome.directory) {
+        self.developerHome = developerHome
+    }
 
     func validate(_ item: StorageItem, inside root: URL, fileManager: FileManager = .default) throws -> URL {
         guard let rawURL = item.url else { throw CleanupPolicyError.missingURL(item.displayName) }
@@ -92,7 +97,7 @@ struct CleanupPathPolicy: Sendable {
 
     private func isForbiddenBroadRoot(_ url: URL) -> Bool {
         let path = url.standardizedFileURL.path
-        let home = RealUserHome.directory.path
+        let home = developerHome.canonicalFileURL.path
         let broad = [
             "/",
             home,
@@ -100,11 +105,11 @@ struct CleanupPathPolicy: Sendable {
             "\(home)/Library/Developer",
             "\(home)/Library/Caches",
             "\(home)/Library/Application Support",
-            RealUserHome.cursorSupportDirectory.path,
-            RealUserHome.cursorHomeDirectory.path,
-            RealUserHome.codexHomeDirectory.path,
-            RealUserHome.claudeHomeDirectory.path,
-            RealUserHome.claudeSupportDirectory.path
+            "\(home)/Library/Application Support/Cursor",
+            "\(home)/.cursor",
+            "\(home)/.codex",
+            "\(home)/.claude",
+            "\(home)/Library/Application Support/Claude"
         ]
         return broad.contains(path)
     }
@@ -119,7 +124,7 @@ struct CleanupPathPolicy: Sendable {
         case .codexCache, .claudeCache:
             return AIToolAllowlist.systemCacheFolderNames.contains(root.lastPathComponent)
         case .packageManagerCache:
-            return DeveloperCacheGroup.allCases.contains { $0.url.canonicalFileURL == candidate && candidate == root }
+            return DeveloperCacheGroup.allCases.contains { $0.url(home: developerHome).canonicalFileURL == candidate && candidate == root }
         default:
             return false
         }
@@ -172,7 +177,7 @@ struct CleanupPathPolicy: Sendable {
             }
             return isExactAllowlistedChild(relative, names: AIToolAllowlist.claudeChildNames)
         case .packageManagerCache:
-            return candidate == root && DeveloperCacheGroup.allCases.contains { $0.url.canonicalFileURL == candidate }
+            return candidate == root && DeveloperCacheGroup.allCases.contains { $0.url(home: developerHome).canonicalFileURL == candidate }
         case .simulatorDevice, .simulatorRuntime:
             return false
         }

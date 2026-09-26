@@ -299,15 +299,17 @@ enum DeveloperCacheGroup: String, CaseIterable, Identifiable, Sendable {
         }
     }
 
-    var url: URL {
+    var url: URL { url(home: RealUserHome.directory) }
+
+    func url(home: URL) -> URL {
         switch self {
-        case .swiftPM: RealUserHome.swiftPackageCacheDirectory
-        case .cocoaPods: RealUserHome.cocoaPodsCacheDirectory
-        case .carthage: RealUserHome.carthageCacheDirectory
-        case .npm: RealUserHome.npmCacheDirectory
-        case .yarn: RealUserHome.yarnCacheDirectory
-        case .pnpm: RealUserHome.pnpmStoreDirectory
-        case .bun: RealUserHome.bunCacheDirectory
+        case .swiftPM: home.appending(path: "Library/Caches/org.swift.swiftpm", directoryHint: .isDirectory)
+        case .cocoaPods: home.appending(path: "Library/Caches/CocoaPods", directoryHint: .isDirectory)
+        case .carthage: home.appending(path: "Library/Caches/org.carthage.CarthageKit", directoryHint: .isDirectory)
+        case .npm: home.appending(path: ".npm/_cacache", directoryHint: .isDirectory)
+        case .yarn: home.appending(path: "Library/Caches/Yarn", directoryHint: .isDirectory)
+        case .pnpm: home.appending(path: "Library/pnpm/store", directoryHint: .isDirectory)
+        case .bun: home.appending(path: ".bun/install/cache", directoryHint: .isDirectory)
         }
     }
 
