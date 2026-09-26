@@ -229,7 +229,7 @@ final class AppModel {
                             }
                             return try await XcodeStorageScanner(category: category).scan(in: context)
                         } catch {
-                            return StorageCategorySnapshot(category: category, items: [], scannedAt: .now, warnings: [error.localizedDescription])
+                            return StorageCategorySnapshot(category: category, items: [], scannedAt: .now, warnings: [error.localizedDescription], status: .failed)
                         }
                     }
                 }

@@ -27,7 +27,7 @@ actor CleanupHistoryStore {
 
 actor ScanCacheStore {
     private let defaults: UserDefaults
-    private let key = "lastScanSnapshot.v1"
+    private let key = "lastScanSnapshot.v2"
 
     init(defaults: UserDefaults = .standard) {
         self.defaults = defaults

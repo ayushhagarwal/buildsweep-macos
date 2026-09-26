@@ -77,7 +77,7 @@ struct DashboardView: View {
                     Button {
                         model.selection = category
                     } label: {
-                        CategoryRow(category: category, size: model.snapshot.categories[category]?.totalSize ?? 0)
+                        CategoryRow(category: category, snapshot: model.snapshot.categories[category])
                     }
                     .buttonStyle(.plain)
                     if category != displayCategories.last { Divider().padding(.leading, 62) }
@@ -141,13 +141,14 @@ struct DashboardView: View {
 
     private var lastScanText: String {
         if case .scanning(let completed, let total) = model.scanState { return "Scanning progressively — \(completed) of \(total) categories" }
-        return "Last scan \(BuildSweepFormatters.date(model.snapshot.completedAt))"
+        guard let completedAt = model.snapshot.completedAt else { return "No completed scan yet" }
+        return "Last scan \(completedAt.formatted(.relative(presentation: .named))) · \(BuildSweepFormatters.date(completedAt))"
     }
 }
 
 private struct CategoryRow: View {
     let category: StorageCategoryID
-    let size: Int64
+    let snapshot: StorageCategorySnapshot?
     @State private var hovering = false
 
     var body: some View {
@@ -158,7 +159,16 @@ private struct CategoryRow: View {
                 Text(categoryDescription).font(.caption).foregroundStyle(.secondary)
             }
             Spacer()
-            Text(BuildSweepFormatters.bytes(size))
+                if snapshot?.status == .failed {
+                    Label("Needs attention", systemImage: "exclamationmark.triangle.fill")
+                        .font(.caption).foregroundStyle(.orange)
+                        .help(snapshot?.warnings.joined(separator: "\n") ?? "This category could not be scanned.")
+                } else if snapshot?.status == .partial {
+                    Label("Partial", systemImage: "info.circle")
+                        .font(.caption).foregroundStyle(.secondary)
+                        .help(snapshot?.warnings.joined(separator: "\n") ?? "This category was only partially scanned.")
+                }
+                Text(BuildSweepFormatters.bytes(snapshot?.totalSize ?? 0))
                 .font(.title3.weight(.semibold))
                 .monospacedDigit()
             Image(systemName: "chevron.right").foregroundStyle(.tertiary)

@@ -155,11 +155,32 @@ struct StorageCategorySnapshot: Identifiable, Codable, Hashable, Sendable {
     let items: [StorageItem]
     let scannedAt: Date
     let warnings: [String]
+    let status: StorageCategoryScanStatus
+
+    init(
+        category: StorageCategoryID,
+        items: [StorageItem],
+        scannedAt: Date,
+        warnings: [String],
+        status: StorageCategoryScanStatus = .complete
+    ) {
+        self.category = category
+        self.items = items
+        self.scannedAt = scannedAt
+        self.warnings = warnings
+        self.status = status
+    }
 
     var totalSize: Int64 { items.reduce(0) { $0 + $1.size } }
     var reclaimableSize: Int64 {
         items.filter { $0.action != .inspectionOnly }.reduce(0) { $0 + $1.size }
     }
+}
+
+enum StorageCategoryScanStatus: String, Codable, Sendable {
+    case complete
+    case partial
+    case failed
 }
 
 struct ScanSnapshot: Codable, Hashable, Sendable {

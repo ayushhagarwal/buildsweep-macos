@@ -60,10 +60,14 @@ struct CategoryView: View {
                 .frame(width: 130)
             }
 
-            if let warning = model.snapshot.categories[category]?.warnings.first {
-                Label(warning, systemImage: "info.circle")
-                    .font(.callout)
-                    .foregroundStyle(.secondary)
+            if let scan = model.snapshot.categories[category], !scan.warnings.isEmpty {
+                VStack(alignment: .leading, spacing: 6) {
+                    ForEach(scan.warnings, id: \.self) { warning in
+                        Label(warning, systemImage: scan.status == .failed ? "exclamationmark.triangle" : "info.circle")
+                            .font(.callout)
+                            .foregroundStyle(scan.status == .failed ? Color.orange : Color.secondary)
+                    }
+                }
             }
 
             if category == .simulators {
@@ -83,7 +87,11 @@ struct CategoryView: View {
         } description: {
             Text(emptyDescription)
         } actions: {
-            if category == .aiTools && !model.hasAnyAIRoot {
+            if model.snapshot.categories[category]?.status == .failed {
+                SettingsLink { Text("Check Access in Settings") }
+                    .buttonStyle(.borderedProminent)
+                Button("Scan Again") { model.startScan() }
+            } else if category == .aiTools && !model.hasAnyAIRoot {
                 SettingsLink {
                     Text("Open Settings")
                 }
@@ -97,6 +105,8 @@ struct CategoryView: View {
     }
 
     private var emptyTitle: String {
+        if model.snapshot.categories[category]?.status == .failed { return "Couldn’t scan this category" }
+        if model.snapshot.categories[category]?.status == .partial { return "Some data couldn’t be scanned" }
         if category == .aiTools && !model.hasAnyAIRoot {
             return "Grant an AI tool folder"
         }
@@ -104,6 +114,12 @@ struct CategoryView: View {
     }
 
     private var emptyDescription: String {
+        if model.snapshot.categories[category]?.status == .failed {
+            return model.snapshot.categories[category]?.warnings.joined(separator: "\n") ?? "Check folder access in Settings and scan again."
+        }
+        if model.snapshot.categories[category]?.status == .partial {
+            return model.snapshot.categories[category]?.warnings.joined(separator: "\n") ?? "Review the warning above, then scan again."
+        }
         if category == .aiTools && !model.hasAnyAIRoot {
             return "Grant Cursor, Codex, or Claude folders in Settings › Privacy. BuildSweep scans cache and logs only; chats and skills are never read."
         }

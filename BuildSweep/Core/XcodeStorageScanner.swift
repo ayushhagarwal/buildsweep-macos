@@ -33,7 +33,7 @@ actor XcodeStorageScanner: StorageScanner {
 
     private func scanDerivedData(_ context: ScanContext) async throws -> StorageCategorySnapshot {
         let root = context.developerRoot.appending(path: "Xcode/DerivedData", directoryHint: .isDirectory)
-        let children = directoryChildren(at: root)
+        let children = try directoryChildren(at: root)
         let cacheNames: Set<String> = ["ModuleCache.noindex", "SDKStatCaches.noindex", "CompilationCache.noindex", "SymbolCache.noindex"]
         var items: [StorageItem] = []
         for child in children where !cacheNames.contains(child.lastPathComponent) {
@@ -64,7 +64,7 @@ actor XcodeStorageScanner: StorageScanner {
     private func scanArchives(_ context: ScanContext) async throws -> StorageCategorySnapshot {
         let root = context.developerRoot.appending(path: "Xcode/Archives", directoryHint: .isDirectory)
         var items: [StorageItem] = []
-        for url in archiveURLs(at: root) {
+        for url in try archiveURLs(at: root) {
             try Task.checkCancellation()
             let info = (NSDictionary(contentsOf: url.appending(path: "Info.plist")) as? [String: Any]) ?? [:]
             let appProperties = info["ApplicationProperties"] as? [String: Any] ?? [:]
@@ -73,7 +73,7 @@ actor XcodeStorageScanner: StorageScanner {
             let build = appProperties["CFBundleVersion"] as? String ?? "—"
             let bundleID = appProperties["CFBundleIdentifier"] as? String ?? "Unknown"
             let signing = appProperties["SigningIdentity"] as? String ?? "Unknown"
-            let dSYMs = directoryChildren(at: url.appending(path: "dSYMs", directoryHint: .isDirectory))
+            let dSYMs = try directoryChildren(at: url.appending(path: "dSYMs", directoryHint: .isDirectory))
             let values = try? url.resourceValues(forKeys: [.contentModificationDateKey])
             let size = try await sizer.allocatedSize(of: url)
             items.append(StorageItem(
@@ -103,7 +103,7 @@ actor XcodeStorageScanner: StorageScanner {
         var items: [StorageItem] = []
         for relative in candidates {
             let root = context.developerRoot.appending(path: relative, directoryHint: .isDirectory)
-            let children = directoryChildren(at: root).sorted {
+            let children = try directoryChildren(at: root).sorted {
                 let left = (try? $0.resourceValues(forKeys: [.contentModificationDateKey]).contentModificationDate) ?? .distantPast
                 let right = (try? $1.resourceValues(forKeys: [.contentModificationDateKey]).contentModificationDate) ?? .distantPast
                 return left > right
@@ -145,14 +145,14 @@ actor XcodeStorageScanner: StorageScanner {
         let documentationRoots = ["Shared/Documentation/DocSets", "Xcode/DocumentationCache"]
         for relative in documentationRoots {
             let root = context.developerRoot.appending(path: relative, directoryHint: .isDirectory)
-            for child in directoryChildren(at: root) {
+            for child in try directoryChildren(at: root) {
                 let size = try await sizer.allocatedSize(of: child)
                 items.append(StorageItem(category: .cachesAndLogs, kind: .documentation, displayName: child.lastPathComponent, url: child, size: size, risk: .redownloads, action: .trash))
             }
         }
 
         let logsRoot = context.developerRoot.appending(path: "Xcode/iOS Device Logs", directoryHint: .isDirectory)
-        for child in directoryChildren(at: logsRoot) {
+        for child in try directoryChildren(at: logsRoot) {
             let values = try? child.resourceValues(forKeys: [.contentModificationDateKey])
             let size = try await sizer.allocatedSize(of: child)
             items.append(StorageItem(category: .cachesAndLogs, kind: .deviceLog, displayName: child.lastPathComponent, url: child, size: size, modifiedAt: values?.contentModificationDate, risk: .reviewFirst, action: .trash))
@@ -165,7 +165,7 @@ actor XcodeStorageScanner: StorageScanner {
         }
 
         if let cacheRoot = context.xcodeCacheRoot {
-            for child in directoryChildren(at: cacheRoot) {
+            for child in try directoryChildren(at: cacheRoot) {
                 let size = try await sizer.allocatedSize(of: child)
                 let knownNames: Set<String> = ["Cache.db", "Cache.db-shm", "Cache.db-wal", "TestReport", "fsCachedData"]
                 let isKnown = knownNames.contains(child.lastPathComponent)
@@ -213,9 +213,9 @@ actor XcodeStorageScanner: StorageScanner {
                     metadata: ["Version": runtime.version, "Management": "Open Xcode Settings › Components"]
                 )
             }
-            return StorageCategorySnapshot(category: category, items: items, scannedAt: .now, warnings: inventory.limitation.map { [$0] } ?? [])
+            return StorageCategorySnapshot(category: category, items: items, scannedAt: .now, warnings: inventory.limitation.map { [$0] } ?? [], status: inventory.limitation == nil ? .complete : .partial)
         } catch {
-            return StorageCategorySnapshot(category: category, items: [], scannedAt: .now, warnings: ["Simulator inventory is unavailable in this sandboxed build. Manage runtimes in Xcode Settings › Components."])
+            return StorageCategorySnapshot(category: category, items: [], scannedAt: .now, warnings: ["Simulator inventory is unavailable in this sandboxed build. Manage runtimes in Xcode Settings › Components."], status: .partial)
         }
     }
 
@@ -223,25 +223,33 @@ actor XcodeStorageScanner: StorageScanner {
         StorageCategorySnapshot(category: category, items: items.sorted { $0.size > $1.size }, scannedAt: .now, warnings: [])
     }
 
-    private func directoryChildren(at url: URL) -> [URL] {
-        (try? fileManager.contentsOfDirectory(
-            at: url,
-            includingPropertiesForKeys: [.isDirectoryKey, .contentModificationDateKey],
-            options: [.skipsHiddenFiles]
-        )) ?? []
+    private func directoryChildren(at url: URL) throws -> [URL] {
+        do {
+            return try fileManager.contentsOfDirectory(
+                at: url,
+                includingPropertiesForKeys: [.isDirectoryKey, .contentModificationDateKey],
+                options: [.skipsHiddenFiles]
+            )
+        } catch let error as CocoaError where error.code == .fileReadNoSuchFile {
+            return []
+        }
     }
 
-    private func archiveURLs(at root: URL) -> [URL] {
+    private func archiveURLs(at root: URL) throws -> [URL] {
+        guard fileManager.fileExists(atPath: root.path) else { return [] }
+        var enumerationError: Error?
         guard let enumerator = fileManager.enumerator(
             at: root,
             includingPropertiesForKeys: [.isDirectoryKey, .contentModificationDateKey],
-            options: [.skipsHiddenFiles, .skipsPackageDescendants]
-        ) else { return [] }
+            options: [.skipsHiddenFiles, .skipsPackageDescendants],
+            errorHandler: { _, error in enumerationError = error; return false }
+        ) else { throw CocoaError(.fileReadNoPermission) }
         var archives: [URL] = []
         for case let url as URL in enumerator where url.pathExtension == "xcarchive" {
             archives.append(url)
             enumerator.skipDescendants()
         }
+        if let enumerationError { throw enumerationError }
         return archives
     }
 
