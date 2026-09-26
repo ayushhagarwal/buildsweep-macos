@@ -134,6 +134,21 @@ struct StorageItem: Identifiable, Codable, Hashable, Sendable {
     }
 }
 
+struct StorageChildSummary: Identifiable, Hashable, Sendable {
+    let url: URL
+    let isDirectory: Bool
+    let size: Int64?
+    let modifiedAt: Date?
+
+    var id: String { url.path }
+    var name: String { url.lastPathComponent }
+}
+
+struct StorageChildrenInspection: Sendable {
+    let children: [StorageChildSummary]
+    let totalCount: Int
+}
+
 struct StorageCategorySnapshot: Identifiable, Codable, Hashable, Sendable {
     var id: StorageCategoryID { category }
     let category: StorageCategoryID
@@ -452,4 +467,3 @@ protocol SimulatorControlling: Sendable {
     func inventory() async throws -> SimulatorInventory
     func deleteDevice(id: String) async throws
 }
-

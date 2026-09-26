@@ -136,6 +136,9 @@ private struct StorageItemRow: View {
     let item: StorageItem
     @State private var expanded = false
     @State private var hovering = false
+    @State private var childInspection: StorageChildrenInspection?
+    @State private var inspectionError: String?
+    @State private var isInspecting = false
 
     var body: some View {
         VStack(alignment: .leading, spacing: 10) {
@@ -190,6 +193,7 @@ private struct StorageItemRow: View {
                         }
                         .font(.caption)
                     }
+                    childContents
                     HStack {
                         Button("Reveal in Finder") { model.reveal(item) }.disabled(item.url == nil)
                         Button("Copy Path") { model.copyPath(item) }.disabled(item.url == nil)
@@ -204,9 +208,61 @@ private struct StorageItemRow: View {
         .padding(.horizontal, 6)
         .background(hovering ? BuildSweepTheme.hoverFill : Color.clear, in: RoundedRectangle(cornerRadius: 10, style: .continuous))
         .onHover { hovering = $0 }
+        .task(id: expanded) {
+            guard expanded, let url = item.url else { return }
+            isInspecting = true
+            inspectionError = nil
+            defer { isInspecting = false }
+            do {
+                childInspection = try await DirectorySizer().inspectImmediateChildren(of: url)
+            } catch is CancellationError {
+                return
+            } catch {
+                inspectionError = error.localizedDescription
+            }
+        }
         .contextMenu {
             Button("Reveal in Finder") { model.reveal(item) }.disabled(item.url == nil)
             Button("Copy Path") { model.copyPath(item) }.disabled(item.url == nil)
+        }
+    }
+
+    @ViewBuilder
+    private var childContents: some View {
+        if let url = item.url {
+            VStack(alignment: .leading, spacing: 6) {
+                Text("Contents").font(.caption.weight(.semibold))
+                if isInspecting {
+                    ProgressView("Measuring immediate contents…").controlSize(.small)
+                } else if let inspectionError {
+                    Text("Couldn’t inspect this folder: \(inspectionError)")
+                        .font(.caption).foregroundStyle(.secondary)
+                } else if let childInspection {
+                    if childInspection.totalCount == 0 {
+                        Text("No contents to show.").font(.caption).foregroundStyle(.secondary)
+                    } else {
+                        ForEach(childInspection.children) { child in
+                            HStack(spacing: 8) {
+                                Image(systemName: child.isDirectory ? "folder" : "doc")
+                                    .foregroundStyle(.secondary)
+                                Text(child.name).lineLimit(1)
+                                Spacer(minLength: 8)
+                                Text(child.size.map(BuildSweepFormatters.bytes) ?? "Size unavailable")
+                                    .monospacedDigit().foregroundStyle(.secondary)
+                            }
+                            .font(.caption)
+                        }
+                        if childInspection.totalCount > childInspection.children.count {
+                            Text("Showing \(childInspection.children.count) of \(childInspection.totalCount) immediate items.")
+                                .font(.caption2).foregroundStyle(.secondary)
+                        }
+                    }
+                }
+                Text("Folder sizes are estimates based on allocated file space.")
+                    .font(.caption2).foregroundStyle(.tertiary)
+            }
+            .padding(10)
+            .background(.quaternary.opacity(0.25), in: RoundedRectangle(cornerRadius: 8))
         }
     }
 

@@ -40,4 +40,32 @@ actor DirectorySizer {
         }
         return total
     }
+
+    func inspectImmediateChildren(of url: URL, limit: Int = 50) async throws -> StorageChildrenInspection {
+        let values = try url.resourceValues(forKeys: [.isDirectoryKey, .isRegularFileKey])
+        guard values.isDirectory == true else {
+            return StorageChildrenInspection(children: [], totalCount: 0)
+        }
+        let urls = try fileManager.contentsOfDirectory(
+            at: url,
+            includingPropertiesForKeys: [.isDirectoryKey, .isSymbolicLinkKey, .contentModificationDateKey],
+            options: []
+        ).sorted { $0.lastPathComponent.localizedStandardCompare($1.lastPathComponent) == .orderedAscending }
+        let candidates = Array(urls.prefix(max(0, limit)))
+        var children: [StorageChildSummary] = []
+        children.reserveCapacity(candidates.count)
+        for child in candidates {
+            try Task.checkCancellation()
+            let childValues = try? child.resourceValues(forKeys: [.isDirectoryKey, .isSymbolicLinkKey, .contentModificationDateKey])
+            let isSymlink = childValues?.isSymbolicLink == true
+            let size = isSymlink ? nil : try? await allocatedSize(of: child)
+            children.append(StorageChildSummary(
+                url: child,
+                isDirectory: childValues?.isDirectory == true,
+                size: size,
+                modifiedAt: childValues?.contentModificationDate
+            ))
+        }
+        return StorageChildrenInspection(children: children, totalCount: urls.count)
+    }
 }
