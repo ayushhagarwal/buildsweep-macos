@@ -52,3 +52,6 @@ fastlane/test_output
 *.mobileprovision
 *.pem
 secrets/
+
+# Notarization API private keys
+*.p8

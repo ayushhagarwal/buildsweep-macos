@@ -41,7 +41,7 @@ APP_SIGNING_ENTITLEMENTS="$ENTITLEMENTS"
 HELPER_SIGNING_ENTITLEMENTS="$HELPER_ENTITLEMENTS"
 if [[ "$LOCAL_ONLY" != "1" ]]; then
   if [[ -z "${DEVELOPMENT_TEAM:-}" ]]; then
-    IDENTITY_LINE="$(security find-identity -v -p codesigning | awk -F '\"' -v identity="$IDENTITY" '$2 == identity || index($0, identity) { print; exit }')"
+    IDENTITY_LINE="$(security find-identity -v -p codesigning | awk -F '\"' -v identity="$IDENTITY" '$2 == identity || index($0, identity) { print $2; exit }')"
     DEVELOPMENT_TEAM="$(printf '%s\n' "$IDENTITY_LINE" | sed -nE 's/.*\(([A-Z0-9]{10})\)[[:space:]]*$/\1/p')"
   fi
   if [[ ! "${DEVELOPMENT_TEAM:-}" =~ ^[A-Z0-9]{10}$ ]]; then
@@ -85,12 +85,26 @@ if [[ "$LOCAL_ONLY" != "1" ]]; then
   codesign --verify --strict --verbose=2 "$MCP_HELPER"
   codesign --force --options runtime --timestamp --sign "$IDENTITY" --entitlements "$APP_SIGNING_ENTITLEMENTS" "$APP"
   codesign --verify --deep --strict --verbose=2 "$APP"
-  codesign -dv --verbose=4 "$MCP_HELPER" 2>&1 | rg -q "TeamIdentifier=${DEVELOPMENT_TEAM}"
-  codesign -dv --verbose=4 "$APP" 2>&1 | rg -q "TeamIdentifier=${DEVELOPMENT_TEAM}"
+  HELPER_SIGNATURE="$(codesign -dv --verbose=4 "$MCP_HELPER" 2>&1)"
+  APP_SIGNATURE="$(codesign -dv --verbose=4 "$APP" 2>&1)"
+  if [[ "$HELPER_SIGNATURE" != *"TeamIdentifier=${DEVELOPMENT_TEAM}"* || "$APP_SIGNATURE" != *"TeamIdentifier=${DEVELOPMENT_TEAM}"* ]]; then
+    echo "The app and MCP helper must both be signed by team ${DEVELOPMENT_TEAM}." >&2
+    exit 1
+  fi
 fi
 
 cp -R "$APP" "$STAGE/$APP_NAME.app"
 ln -s /Applications "$STAGE/Applications"
+
+# Keep signing configuration out of the public installer if it was copied into
+# the staging directory by a local build or packaging customization.
+rm -f "$STAGE/BuildSweep.entitlements" "$STAGE/BuildSweepMCP.entitlements"
+UNEXPECTED_STAGE_ITEMS="$(find "$STAGE" -mindepth 1 -maxdepth 1 ! -name "$APP_NAME.app" ! -name Applications -print)"
+if [[ -n "$UNEXPECTED_STAGE_ITEMS" ]]; then
+  echo "Unexpected item(s) in DMG staging directory:" >&2
+  echo "$UNEXPECTED_STAGE_ITEMS" >&2
+  exit 1
+fi
 
 rm -f "$DMG"
 hdiutil create \
