@@ -16,22 +16,36 @@ struct CategoryView: View {
     var body: some View {
         ZStack {
             AppBackground()
-            VStack(spacing: 0) {
-                header
-                    .padding(20)
-                    .surfaceCard(cornerRadius: 16)
-                    .padding([.horizontal, .top], 16)
-                if items.isEmpty {
-                    emptyState
-                } else {
-                    List(items) { item in
-                        StorageItemRow(model: model, item: item)
-                            .listRowBackground(Color.clear)
+            ScrollView(.vertical) {
+                VStack(alignment: .leading, spacing: 16) {
+                    header
+                        .padding(20)
+                        .surfaceCard(cornerRadius: 16)
+
+                    if items.isEmpty {
+                        emptyState
+                            .frame(maxWidth: .infinity)
+                            .frame(minHeight: 260)
+                    } else {
+                        LazyVStack(spacing: 0) {
+                            ForEach(items) { item in
+                                StorageItemRow(model: model, item: item)
+                                    .padding(.horizontal, 12)
+                                    .padding(.vertical, 5)
+                                if item.id != items.last?.id {
+                                    Divider().padding(.leading, 76)
+                                }
+                            }
+                        }
+                        .surfaceCard(cornerRadius: 16)
                     }
-                    .listStyle(.inset)
-                    .scrollContentBackground(.hidden)
                 }
+                .padding(16)
+                .frame(maxWidth: 1100, alignment: .topLeading)
+                .frame(maxWidth: .infinity, alignment: .topLeading)
             }
+            .scrollIndicators(.visible)
+            .frame(maxWidth: .infinity, maxHeight: .infinity)
         }
         .navigationTitle(category.title)
         .searchable(text: $model.searchText, prompt: "Search \(category.title)")
@@ -43,8 +57,8 @@ struct CategoryView: View {
                 HStack(spacing: 12) {
                     IconTile(systemImage: category.systemImage, tint: BuildSweepTheme.categoryForeground(for: category), size: 40)
                     VStack(alignment: .leading, spacing: 4) {
-                        Text(category.title).font(.largeTitle.bold())
-                        Text("\(items.count) items · \(BuildSweepFormatters.bytes(items.reduce(0) { $0 + $1.size })) estimated")
+                        Text("\(items.count) items").font(.title2.bold())
+                        Text("\(BuildSweepFormatters.bytes(items.reduce(0) { $0 + $1.size })) estimated · Select items to review cleanup")
                             .foregroundStyle(.secondary)
                     }
                 }
@@ -83,34 +97,46 @@ struct CategoryView: View {
         }
     }
 
+    @ViewBuilder
     private var emptyState: some View {
-        ContentUnavailableView {
-            Label {
-                Text(emptyTitle)
-            } icon: {
-                IconTile(systemImage: category.systemImage, tint: BuildSweepTheme.categoryForeground(for: category), size: 52)
+        if case .scanning = model.scanState {
+            VStack(spacing: 12) {
+                ProgressView()
+                Text("Scanning \(category.title)…")
+                    .font(.headline)
+                Text("This view will update when the scan finishes.")
+                    .foregroundStyle(.secondary)
             }
-        } description: {
-            Text(emptyDescription)
-        } actions: {
-            if model.snapshot.categories[category]?.status == .failed {
-                SettingsLink { Text("Check Access in Settings") }
-                    .buttonStyle(.borderedProminent)
-                Button("Scan Again") { model.startScan() }
-            } else if category == .aiTools && !model.hasAnyAIRoot {
-                SettingsLink {
-                    Text("Open Settings")
+            .frame(maxWidth: .infinity, minHeight: 240)
+        } else {
+            ContentUnavailableView {
+                Label {
+                    Text(emptyTitle)
+                } icon: {
+                    IconTile(systemImage: category.systemImage, tint: BuildSweepTheme.categoryForeground(for: category), size: 52)
                 }
-                .buttonStyle(.borderedProminent)
-            } else if category == .developerCaches && !DeveloperCacheGroup.allCases.contains(where: { model.packageCacheRoot(for: $0) != nil }) {
-                SettingsLink { Text("Choose package-manager caches") }
+            } description: {
+                Text(emptyDescription)
+            } actions: {
+                if model.snapshot.categories[category]?.status == .failed {
+                    SettingsLink { Text("Check Access in Settings") }
+                        .buttonStyle(.borderedProminent)
+                    Button("Scan Again") { model.startScan() }
+                } else if category == .aiTools && !model.hasAnyAIRoot {
+                    SettingsLink {
+                        Text("Open Settings")
+                    }
                     .buttonStyle(.borderedProminent)
-            } else {
-                Button("Scan Again") { model.startScan() }
-                    .buttonStyle(.borderedProminent)
+                } else if category == .developerCaches && !DeveloperCacheGroup.allCases.contains(where: { model.packageCacheRoot(for: $0) != nil }) {
+                    SettingsLink { Text("Choose package-manager caches") }
+                        .buttonStyle(.borderedProminent)
+                } else {
+                    Button("Scan Again") { model.startScan() }
+                        .buttonStyle(.borderedProminent)
+                }
             }
+            .frame(maxWidth: .infinity, minHeight: 240)
         }
-        .frame(maxWidth: .infinity, maxHeight: .infinity)
     }
 
     private var emptyTitle: String {
@@ -180,6 +206,7 @@ private struct StorageItemRow: View {
                     set: { _ in model.toggleSelection(item) }
                 ))
                 .labelsHidden()
+                .toggleStyle(.checkbox)
                 .disabled(item.action == .inspectionOnly)
 
                 Image(systemName: icon)

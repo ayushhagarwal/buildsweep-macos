@@ -46,7 +46,7 @@ struct CleanupReviewView: View {
                 HStack(spacing: 14) {
                     IconTile(systemImage: "trash", size: 40)
                     VStack(alignment: .leading, spacing: 4) {
-                        Text("Review cleanup").font(.largeTitle.bold())
+                        Text("Review cleanup").font(.title2.bold())
                         Text("\(plan.items.count) items · \(BuildSweepFormatters.bytes(plan.selectedSize)) estimated")
                             .foregroundStyle(.secondary)
                     }
@@ -101,9 +101,14 @@ struct CleanupReviewView: View {
                         model.cancelCleanupReview()
                         dismiss()
                     }
+                    .keyboardShortcut(.cancelAction)
+                    .disabled(executing)
                     Button(executing ? "Cleaning…" : "Confirm Cleanup") {
                         executing = true
-                        Task { await model.executePreservedCleanup() }
+                        Task {
+                            await model.executePreservedCleanup()
+                            executing = false
+                        }
                     }
                     .buttonStyle(.borderedProminent)
                     .disabled(!canConfirm)
@@ -116,7 +121,7 @@ struct CleanupReviewView: View {
             }
         }
         .buildSweepAppearance()
-        .frame(minWidth: 660, minHeight: 560)
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
         .interactiveDismissDisabled(executing)
     }
 
@@ -207,7 +212,7 @@ struct CleanupResultView: View {
                     )
                     VStack(alignment: .leading, spacing: 4) {
                         Text(result.failedItems.isEmpty ? "Cleanup complete" : "Cleanup finished with issues")
-                            .font(.largeTitle.bold())
+                            .font(.title2.bold())
                         Text(BuildSweepFormatters.bytes(result.recoveredSize))
                             .font(.system(size: 34, weight: .bold, design: .rounded))
                             .foregroundStyle(BuildSweepTheme.accent)
@@ -238,7 +243,7 @@ struct CleanupResultView: View {
                     .listRowBackground(Color.clear)
                 }
                 .scrollContentBackground(.hidden)
-                .frame(minHeight: 220)
+                .frame(minHeight: 120)
                 .surfaceCard()
 
                 if result.hadAnySuccess {
@@ -256,6 +261,6 @@ struct CleanupResultView: View {
             .padding(26)
         }
         .buildSweepAppearance()
-        .frame(minWidth: 620, minHeight: 520)
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
     }
 }

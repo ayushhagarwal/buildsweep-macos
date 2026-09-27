@@ -9,7 +9,7 @@ struct DashboardView: View {
     var body: some View {
         ZStack {
             AppBackground()
-            ScrollView {
+            ScrollView(.vertical) {
                 VStack(alignment: .leading, spacing: 24) {
                     header
                     metrics
@@ -19,12 +19,13 @@ struct DashboardView: View {
                 .padding(28)
                 .frame(maxWidth: 1100, alignment: .leading)
             }
+            .scrollIndicators(.visible)
         }
         .navigationTitle("Overview")
         .sheet(isPresented: $showingStorageMap) {
             if let root = model.developerRoot {
                 DeveloperStorageMapView(root: root.url)
-                    .frame(minWidth: 780, minHeight: 560)
+                    .frame(width: 940, height: 640)
                     .buildSweepAppearance()
             }
         }
@@ -105,7 +106,7 @@ struct DashboardView: View {
     }
 
     private var legend: some View {
-        HStack(spacing: 16) {
+        LazyVGrid(columns: [GridItem(.adaptive(minimum: 120), alignment: .leading)], alignment: .leading, spacing: 8) {
             ForEach(displayCategories, id: \.self) { category in
                 HStack(spacing: 6) {
                     Capsule()
@@ -158,7 +159,7 @@ struct DashboardView: View {
     private var lastScanText: String {
         if case .scanning(let completed, let total) = model.scanState { return "Scanning progressively — \(completed) of \(total) categories" }
         guard let completedAt = model.snapshot.completedAt else { return "No completed scan yet" }
-        return "Last scan \(completedAt.formatted(.relative(presentation: .named))) · \(BuildSweepFormatters.date(completedAt))"
+        return "Last scan \(completedAt.formatted(.relative(presentation: .named)))"
     }
 }
 
@@ -182,75 +183,136 @@ private struct DeveloperStorageMapView: View {
     private var canGoBack: Bool { currentURL != root }
     private var totalSize: Int64 { children.reduce(0) { $0 + ($1.size ?? 0) } }
 
+    private var rankedChildren: [StorageChildSummary] {
+        children.sorted { ($0.size ?? 0) > ($1.size ?? 0) }
+    }
+
+    // Tiny and unmeasured entries remain accessible in the list without
+    // distorting the area of the map or rendering unusable slivers.
+    private var mappedChildren: [StorageChildSummary] {
+        Array(rankedChildren.filter { Double($0.size ?? 0) >= Double(max(1, totalSize)) * 0.01 && ($0.size ?? 0) > 0 }.prefix(12))
+    }
+
     var body: some View {
         VStack(spacing: 0) {
-            HStack {
-                VStack(alignment: .leading, spacing: 4) {
-                    Text("Developer storage map").font(.largeTitle.bold())
-                    Text("\(currentTitle) · \(BuildSweepFormatters.bytes(totalSize)) mapped · showing \(children.count) of \(totalCount) items")
-                        .foregroundStyle(.secondary)
+            HStack(alignment: .top) {
+                VStack(alignment: .leading, spacing: 6) {
+                    Label("STORAGE EXPLORER", systemImage: "square.grid.2x2")
+                        .font(.system(size: 10, weight: .semibold)).tracking(1.4).foregroundStyle(.secondary)
+                    Text(currentTitle).font(.system(size: 26, weight: .bold))
+                    Text("See what’s taking space. Select a folder to explore.")
+                        .font(.callout).foregroundStyle(.secondary)
                 }
                 Spacer()
-                Button("Done") { dismiss() }
+                VStack(alignment: .trailing, spacing: 4) {
+                    Text(BuildSweepFormatters.bytes(totalSize))
+                        .font(.system(size: 30, weight: .semibold, design: .rounded)).monospacedDigit()
+                    Text("allocated in this view").font(.caption).foregroundStyle(.secondary)
+                }
+                Button { dismiss() } label: { Image(systemName: "xmark").font(.system(size: 12, weight: .semibold)) }
+                    .buttonStyle(.bordered).buttonBorderShape(.circle)
+                    .accessibilityLabel("Close storage explorer").keyboardShortcut(.cancelAction)
+                    .padding(.leading, 16)
             }
-            .padding(20)
+            .padding(24)
 
-            HStack(spacing: 8) {
+            HStack(spacing: 10) {
                 Button {
                     currentURL = root
                     currentTitle = "Developer"
                     selected = nil
-                } label: {
-                    Label("Developer", systemImage: "house")
-                }
-                .buttonStyle(.link)
+                } label: { Label("Developer", systemImage: "house") }
+                .buttonStyle(.plain).foregroundStyle(BuildSweepTheme.accent)
                 if canGoBack {
-                    Text("/").foregroundStyle(.tertiary)
-                    Text(currentURL.lastPathComponent).foregroundStyle(.secondary).lineLimit(1)
-                    Spacer()
-                    Button("Parent Folder") {
-                        currentURL = currentURL.deletingLastPathComponent()
-                        currentTitle = currentURL.lastPathComponent
-                        selected = nil
-                    }
-                } else {
-                    Spacer()
+                    Image(systemName: "chevron.right").font(.caption2).foregroundStyle(.tertiary)
+                    Text(currentURL.path.replacingOccurrences(of: root.path + "/", with: ""))
+                        .lineLimit(1).truncationMode(.middle).foregroundStyle(.secondary)
                 }
+                Spacer()
+                if canGoBack {
+                    Button {
+                        currentURL = currentURL.deletingLastPathComponent()
+                        currentTitle = currentURL == root ? "Developer" : currentURL.lastPathComponent
+                        selected = nil
+                    } label: { Label("Back", systemImage: "arrow.up") }
+                    .buttonStyle(.borderless)
+                }
+                Text("\(children.count) of \(totalCount) items").foregroundStyle(.secondary)
             }
-            .padding(.horizontal, 20)
-            .padding(.bottom, 12)
+            .font(.callout)
+            .padding(.horizontal, 24).padding(.bottom, 16)
 
             Group {
                 if isLoading {
-                    ProgressView("Measuring folder sizes…").frame(maxWidth: .infinity, maxHeight: .infinity)
+                    ProgressView("Measuring storage…").frame(maxWidth: .infinity, maxHeight: .infinity)
                 } else if let errorMessage {
                     ContentUnavailableView("Couldn’t read this folder", systemImage: "folder.badge.questionmark", description: Text(errorMessage))
                 } else if children.isEmpty {
-                    ContentUnavailableView("No items in this folder", systemImage: "folder", description: Text("There is no storage to map at this level."))
+                    ContentUnavailableView("This folder is empty", systemImage: "folder", description: Text("Go back to explore another folder."))
                 } else {
-                    HStack(spacing: 0) {
-                        TreemapTileView(children: children, onSelect: { selected = $0 })
-                            .padding(12)
-                        if let selected {
-                            mapItemInspector(selected)
-                                .frame(width: 250)
-                                .padding(.trailing, 16)
+                    HStack(alignment: .top, spacing: 20) {
+                        VStack(alignment: .leading, spacing: 12) {
+                            TreemapTileView(children: mappedChildren, totalSize: totalSize, selectedID: selected?.id, onSelect: { selected = $0 })
+                            Text("Largest items mapped · all measured items are in the list")
+                                .font(.caption).foregroundStyle(.secondary)
                         }
+                        VStack(alignment: .leading, spacing: 12) {
+                            HStack {
+                                Text("CONTENTS").font(.system(size: 10, weight: .semibold)).tracking(1.2)
+                                Spacer()
+                                Text("Largest first").font(.caption)
+                            }.foregroundStyle(.secondary)
+                            ScrollView {
+                                LazyVStack(spacing: 4) {
+                                    ForEach(Array(rankedChildren.enumerated()), id: \.element.id) { index, item in
+                                        Button { selected = item } label: {
+                                            HStack(spacing: 10) {
+                                                RoundedRectangle(cornerRadius: 3).fill(mapColor(index)).frame(width: 7, height: 28)
+                                                VStack(alignment: .leading, spacing: 4) {
+                                                    Text(item.name).font(.callout.weight(.medium)).lineLimit(1)
+                                                    Text(mapSize(item.size))
+                                                        .font(.caption).foregroundStyle(.secondary)
+                                                }
+                                                Spacer(minLength: 2)
+                                                Image(systemName: item.isDirectory ? "folder" : "doc").foregroundStyle(.secondary)
+                                            }
+                                            .padding(10)
+                                            .background(selected?.id == item.id ? BuildSweepTheme.accentSoft : Color.clear, in: RoundedRectangle(cornerRadius: 10))
+                                            .contentShape(Rectangle())
+                                        }.buttonStyle(.plain)
+                                    }
+                                }
+                            }
+                            if let selected {
+                                Divider()
+                                mapItemInspector(selected)
+                            } else {
+                                Label("Select an item to see its details.", systemImage: "cursorarrow.click")
+                                    .font(.caption).foregroundStyle(.secondary).padding(.vertical, 8)
+                            }
+                        }
+                        .frame(width: 270)
                     }
                 }
             }
             .frame(maxWidth: .infinity, maxHeight: .infinity)
+            .padding(.horizontal, 24).padding(.bottom, 20)
 
-            HStack {
-                Label("Folders can be opened for deeper inspection", systemImage: "folder")
+            HStack(spacing: 6) {
+                Image(systemName: "lock.shield")
+                Text("Read-only inspection")
                 Spacer()
-                Text("Read-only · sizes cover the shown items only · first 200 items alphabetically · no file contents read")
+                Text("Allocated sizes are estimates. No file contents are read.")
+                if totalCount > children.count {
+                    Image(systemName: "info.circle").help("Only the first 200 items alphabetically are measured. Totals cover those items only.")
+                }
             }
-            .font(.caption)
-            .foregroundStyle(.secondary)
-            .padding(14)
-            .background(.bar)
+            .font(.caption).foregroundStyle(.secondary)
+            .padding(.horizontal, 24).padding(.vertical, 12)
+            .background(.white.opacity(0.7))
+            .overlay(alignment: .top) { Divider() }
         }
+        .background(BuildSweepTheme.canvas)
         .task(id: currentURL) {
             isLoading = true
             errorMessage = nil
@@ -268,73 +330,96 @@ private struct DeveloperStorageMapView: View {
         }
     }
 
-    @ViewBuilder
     private func mapItemInspector(_ item: StorageChildSummary) -> some View {
-        VStack(alignment: .leading, spacing: 12) {
-            Label(item.isDirectory ? "Folder" : "File", systemImage: item.isDirectory ? "folder.fill" : "doc.fill")
-                .font(.caption.weight(.semibold)).foregroundStyle(.secondary)
-            Text(item.name).font(.title3.bold()).textSelection(.enabled)
+        VStack(alignment: .leading, spacing: 10) {
+            Text(item.name).font(.headline).lineLimit(2).textSelection(.enabled)
             Text(item.url.path(percentEncoded: false))
-                .font(.caption.monospaced()).foregroundStyle(.secondary).textSelection(.enabled)
-            LabeledContent("Allocated", value: item.size.map(BuildSweepFormatters.bytes) ?? "Unavailable")
-            LabeledContent("Modified", value: item.modifiedAt.map { $0.formatted(date: .abbreviated, time: .shortened) } ?? "Unknown")
+                .font(.caption).foregroundStyle(.secondary).lineLimit(2).truncationMode(.middle)
+                .textSelection(.enabled).help(item.url.path)
+            Text("Modified \(item.modifiedAt.map { $0.formatted(date: .abbreviated, time: .omitted) } ?? "date unavailable")")
+                .font(.caption).foregroundStyle(.secondary)
             if item.isSymbolicLink {
-                Label("Symbolic links are not traversed.", systemImage: "link")
-                    .font(.caption).foregroundStyle(.secondary)
+                Label("Symbolic link · not followed", systemImage: "link").font(.caption).foregroundStyle(.secondary)
             }
-            Spacer()
-            if item.isDirectory && !item.isSymbolicLink {
-                Button("Open Folder") {
-                    currentURL = item.url
-                    currentTitle = item.name
-                    selected = nil
+            HStack {
+                if item.isDirectory && !item.isSymbolicLink {
+                    Button("Explore Folder") {
+                        currentURL = item.url
+                        currentTitle = item.name
+                        selected = nil
+                    }.buttonStyle(.borderedProminent)
                 }
-                .buttonStyle(.borderedProminent)
+                Button { NSWorkspace.shared.activateFileViewerSelecting([item.url]) } label: {
+                    Image(systemName: "arrow.up.forward.square")
+                }.help("Reveal in Finder").accessibilityLabel("Reveal in Finder")
             }
-            Button("Reveal in Finder") { NSWorkspace.shared.activateFileViewerSelecting([item.url]) }
-                .buttonStyle(.link)
         }
-        .padding(16)
-        .frame(maxHeight: .infinity, alignment: .topLeading)
-        .surfaceCard(cornerRadius: 14)
+        .padding(.top, 4)
     }
+}
+
+private func mapSize(_ size: Int64?) -> String {
+    guard let size else { return "Size unavailable" }
+    return ByteCountFormatter.string(fromByteCount: size, countStyle: .file)
+}
+
+private func mapColor(_ index: Int) -> Color {
+    let palette: [Color] = [Color(red: 0.20, green: 0.43, blue: 0.87), Color(red: 0.38, green: 0.33, blue: 0.78), Color(red: 0.12, green: 0.57, blue: 0.62), Color(red: 0.77, green: 0.40, blue: 0.23), Color(red: 0.60, green: 0.34, blue: 0.64), Color(red: 0.30, green: 0.52, blue: 0.42)]
+    return palette[index % palette.count]
 }
 
 private struct TreemapTileView: View {
     let children: [StorageChildSummary]
+    let totalSize: Int64
+    let selectedID: String?
     let onSelect: (StorageChildSummary) -> Void
+    @State private var hoveredID: String?
 
     var body: some View {
         GeometryReader { geometry in
             let placements = TreemapPartition.layout(children, in: CGRect(origin: .zero, size: geometry.size))
             ZStack(alignment: .topLeading) {
-                ForEach(children) { child in
-                    if let rect = placements[child.id] {
+                if children.isEmpty {
+                    ContentUnavailableView("No measurable storage", systemImage: "square.grid.2x2", description: Text("All items are available in the contents list."))
+                }
+                ForEach(Array(children.enumerated()), id: \.element.id) { index, child in
+                    if let rect = placements[child.id], rect.width > 8, rect.height > 8 {
+                        let active = selectedID == child.id || hoveredID == child.id
                         Button { onSelect(child) } label: {
-                            VStack(alignment: .leading, spacing: 5) {
-                                Image(systemName: child.isDirectory ? "folder.fill" : "doc.fill")
-                                if rect.width > 86 && rect.height > 38 {
-                                    Text(child.name).lineLimit(2).multilineTextAlignment(.leading)
-                                    Text(child.size.map(BuildSweepFormatters.bytes) ?? "Unavailable")
-                                        .font(.caption2.monospacedDigit()).opacity(0.76)
+                            VStack(alignment: .leading, spacing: 7) {
+                                if rect.width > 100 && rect.height > 110 {
+                                    Image(systemName: child.isDirectory ? "folder" : "doc")
+                                        .font(.system(size: 22, weight: .light)).opacity(0.85)
+                                    Spacer(minLength: 0)
+                                }
+                                if rect.width > 75 && rect.height > 55 {
+                                    Text(child.name).font(.system(size: rect.width > 180 ? 17 : 12, weight: .semibold))
+                                        .lineLimit(1).truncationMode(.middle)
+                                    Text(mapSize(child.size))
+                                        .font(.system(size: rect.width > 180 && rect.height > 150 ? 27 : 13, weight: .medium, design: .rounded))
+                                        .monospacedDigit().lineLimit(1).minimumScaleFactor(0.7)
+                                }
+                                if rect.width > 110 && rect.height > 170 {
+                                    Text("\(Int((Double(child.size ?? 0) / Double(max(1, totalSize)) * 100).rounded()))% of this folder")
+                                        .font(.caption).opacity(0.8)
                                 }
                             }
-                            .font(.caption.weight(.semibold))
-                            .foregroundStyle(.primary)
-                            .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
-                            .padding(8)
-                            .background(child.isDirectory ? BuildSweepTheme.accentSoft : BuildSweepTheme.categoryFill(for: .developerCaches), in: RoundedRectangle(cornerRadius: 8))
-                            .overlay(RoundedRectangle(cornerRadius: 8).stroke(.white.opacity(0.75), lineWidth: 2))
+                            .padding(rect.width > 100 && rect.height > 110 ? 20 : 10)
+                            .frame(width: max(0, rect.width - 6), height: max(0, rect.height - 6), alignment: .bottomLeading)
+                            .foregroundStyle(.white)
+                            .background(LinearGradient(colors: [mapColor(index).opacity(active ? 0.82 : 0.95), mapColor(index)], startPoint: .topLeading, endPoint: .bottomTrailing))
+                            .clipShape(RoundedRectangle(cornerRadius: 16))
+                            .overlay(RoundedRectangle(cornerRadius: 16).strokeBorder(.white.opacity(active ? 0.95 : 0.14), lineWidth: active ? 3 : 1))
                         }
                         .buttonStyle(.plain)
-                        .frame(width: max(0, rect.width - 3), height: max(0, rect.height - 3))
                         .position(x: rect.midX, y: rect.midY)
-                        .help("\(child.name) · \(child.size.map(BuildSweepFormatters.bytes) ?? "size unavailable")")
+                        .onHover { hoveredID = $0 ? child.id : nil }
+                        .accessibilityLabel("\(child.name), \(mapSize(child.size))")
+                        .help("Select \(child.name) to inspect this \(child.isDirectory ? "folder" : "file")")
                     }
                 }
             }
         }
-        .accessibilityLabel("Read-only treemap of folder usage")
     }
 }
 
@@ -362,7 +447,7 @@ private enum TreemapPartition {
             if accumulated >= target { break }
         }
         let firstWeight = weights[..<splitIndex].reduce(0, +)
-        let fraction = min(0.92, max(0.08, Double(firstWeight) / total))
+        let fraction = Double(firstWeight) / total
         if rect.width >= rect.height {
             let width = rect.width * fraction
             partition(Array(items[..<splitIndex]), in: CGRect(x: rect.minX, y: rect.minY, width: width, height: rect.height), into: &result)

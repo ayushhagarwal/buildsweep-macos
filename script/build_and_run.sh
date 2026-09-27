@@ -15,6 +15,9 @@ env DEVELOPER_DIR=/Applications/Xcode.app/Contents/Developer xcodebuild \
   -project "$ROOT_DIR/BuildSweep.xcodeproj" \
   -scheme "$APP_NAME" \
   -configuration Debug \
+  -destination "platform=macOS,arch=$(uname -m)" \
+  ARCHS="$(uname -m)" \
+  ONLY_ACTIVE_ARCH=YES \
   -derivedDataPath "$DERIVED_DATA" \
   CODE_SIGNING_ALLOWED=NO \
   build

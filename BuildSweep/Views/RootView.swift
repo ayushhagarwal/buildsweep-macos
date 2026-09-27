@@ -2,6 +2,7 @@ import SwiftUI
 
 struct RootView: View {
     @Bindable var model: AppModel
+    let contentSize: CGSize
     @Environment(\.openWindow) private var openWindow
 
     var body: some View {
@@ -9,13 +10,33 @@ struct RootView: View {
             if model.needsOnboarding {
                 OnboardingView(model: model)
             } else {
+                // Bound each hosted pane independently: intrinsic scroll-content sizing
+                // can otherwise make NSSplitView taller than its window.
                 NavigationSplitView {
-                    SidebarView(model: model)
+                    GeometryReader { pane in
+                        SidebarView(model: model)
+                            .frame(width: pane.size.width, height: pane.size.height, alignment: .topLeading)
+                    }
+                    .navigationSplitViewColumnWidth(min: 200, ideal: 220, max: 280)
                 } detail: {
-                    detail
+                    GeometryReader { pane in
+                        detail
+                            .frame(width: pane.size.width, height: pane.size.height, alignment: .topLeading)
+                    }
                 }
                 .navigationSplitViewStyle(.balanced)
                 .toolbar {
+                    if model.selection != .overview {
+                        ToolbarItem(placement: .navigation) {
+                            Button {
+                                model.selection = .overview
+                                model.searchText = ""
+                            } label: {
+                                Label("Back to Overview", systemImage: "chevron.left")
+                            }
+                            .help("Back to Overview")
+                        }
+                    }
                     ToolbarItemGroup {
                         scanToolbarItem
                         Button {
@@ -51,15 +72,27 @@ struct RootView: View {
                 }
             }
         }
-        .sheet(isPresented: $model.showingCleanupReview, onDismiss: model.cleanupReviewWasDismissed) {
-            if let plan = model.preservedPlan {
-                CleanupReviewView(model: model, plan: plan)
-                    .buildSweepAppearance()
+        .sheet(isPresented: Binding(
+            get: { model.showingCleanupReview || model.latestCleanupResult != nil },
+            set: { presented in
+                if !presented {
+                    model.cancelCleanupReview()
+                    model.latestCleanupResult = nil
+                }
             }
-        }
-        .sheet(item: $model.latestCleanupResult) { result in
-            CleanupResultView(result: result)
-                .buildSweepAppearance()
+        ), onDismiss: model.cleanupReviewWasDismissed) {
+            Group {
+                if let result = model.latestCleanupResult {
+                    CleanupResultView(result: result)
+                } else if let plan = model.preservedPlan {
+                    CleanupReviewView(model: model, plan: plan)
+                }
+            }
+            .frame(
+                width: min(760, max(640, contentSize.width - 80)),
+                height: min(600, max(480, contentSize.height - 24))
+            )
+            .buildSweepAppearance()
         }
         .alert("BuildSweep", isPresented: Binding(
             get: { model.appMessage != nil },
@@ -70,11 +103,13 @@ struct RootView: View {
             Text(model.appMessage ?? "")
         }
         .task {
-            model.configureMainWindowOpener { openWindow(id: "main") }
-        }
-        .onChange(of: model.showingCleanupReview) { _, isShowing in
-            if isShowing {
-                openWindow(id: "main")
+            model.configureMainWindowOpener {
+                if let existingWindow = NSApp.windows.first(where: { $0.isVisible && $0.canBecomeMain }) {
+                    existingWindow.deminiaturize(nil)
+                    existingWindow.makeKeyAndOrderFront(nil)
+                } else {
+                    openWindow(id: "main")
+                }
                 NSApp.activate(ignoringOtherApps: true)
             }
         }
@@ -82,10 +117,18 @@ struct RootView: View {
 
     @ViewBuilder
     private var detail: some View {
-        switch model.selection {
-        case .overview: DashboardView(model: model)
-        case .history: HistoryView(model: model)
-        default: CategoryView(model: model, category: model.selection)
+        VStack(spacing: 0) {
+            Group {
+                switch model.selection {
+                case .overview: DashboardView(model: model)
+                case .history: HistoryView(model: model)
+                default: CategoryView(model: model, category: model.selection)
+                }
+            }
+            .id(model.selection)
+            .frame(maxWidth: .infinity, maxHeight: .infinity)
+            .clipped()
+            CleanupActionBar(model: model)
         }
     }
 
@@ -105,39 +148,88 @@ struct RootView: View {
     }
 }
 
+private struct CleanupActionBar: View {
+    @Bindable var model: AppModel
+
+    var body: some View {
+        HStack(spacing: 12) {
+            if model.selectedItems.isEmpty {
+                Label(
+                    "To free space, open a category and select items. Review them before confirming cleanup.",
+                    systemImage: "info.circle"
+                )
+                .font(.callout)
+                .foregroundStyle(.secondary)
+                .fixedSize(horizontal: false, vertical: true)
+                Spacer(minLength: 0)
+            } else {
+                Label(
+                    "\(model.selectedItems.count) selected · \(BuildSweepFormatters.bytes(model.selectedSize)) estimated",
+                    systemImage: "checkmark.circle.fill"
+                )
+                .font(.callout.weight(.medium))
+                .foregroundStyle(.primary)
+                .lineLimit(1)
+                .minimumScaleFactor(0.8)
+
+                Spacer(minLength: 8)
+
+                Button("Clear Selection") {
+                    model.selectedItemIDs.removeAll()
+                }
+                Button {
+                    model.prepareCleanup()
+                } label: {
+                    Label("Review Cleanup", systemImage: "trash")
+                }
+                .buttonStyle(.borderedProminent)
+                .help("Review selected items and their effects before moving anything to Trash.")
+            }
+        }
+        .padding(.horizontal, 20)
+        .padding(.vertical, 12)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .background(.bar)
+        .overlay(alignment: .top) { Divider() }
+    }
+}
+
 private struct SidebarView: View {
     @Bindable var model: AppModel
 
     var body: some View {
-        List(selection: $model.selection) {
-            Section {
-                ForEach(StorageCategoryID.allCases.filter { $0 != .history }) { category in
-                    Label {
-                        Text(category.title)
-                    } icon: {
-                        Image(systemName: category.systemImage)
-                            .foregroundStyle(BuildSweepTheme.categoryForeground(for: category))
+        VStack(spacing: 0) {
+            List(selection: $model.selection) {
+                Section {
+                    ForEach(StorageCategoryID.allCases.filter { $0 != .history }) { category in
+                        Label {
+                            Text(category.title)
+                        } icon: {
+                            Image(systemName: category.systemImage)
+                                .foregroundStyle(BuildSweepTheme.categoryForeground(for: category))
+                        }
+                        .badge(categorySize(category))
+                        .tag(category)
                     }
-                    .badge(categorySize(category))
-                    .tag(category)
+                }
+                Section {
+                    Label {
+                        Text(StorageCategoryID.history.title)
+                    } icon: {
+                        Image(systemName: StorageCategoryID.history.systemImage)
+                            .foregroundStyle(BuildSweepTheme.categoryForeground(for: .history))
+                    }
+                    .tag(StorageCategoryID.history)
                 }
             }
-            Section {
-                Label {
-                    Text(StorageCategoryID.history.title)
-                } icon: {
-                    Image(systemName: StorageCategoryID.history.systemImage)
-                        .foregroundStyle(BuildSweepTheme.categoryForeground(for: .history))
-                }
-                .tag(StorageCategoryID.history)
-            }
-        }
-        .listStyle(.sidebar)
-        .navigationTitle("BuildSweep")
-        .safeAreaInset(edge: .bottom, spacing: 0) {
+            .listStyle(.sidebar)
+            .frame(maxHeight: .infinity)
+            .clipped()
+
             SidebarSafetyCallout()
                 .padding(12)
         }
+        .navigationTitle("BuildSweep")
     }
 
     private func categorySize(_ category: StorageCategoryID) -> String {

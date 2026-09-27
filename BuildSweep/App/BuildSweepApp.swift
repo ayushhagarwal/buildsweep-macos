@@ -14,12 +14,17 @@ struct BuildSweepApp: App {
     @State private var model = AppModel()
 
     var body: some Scene {
-        WindowGroup("BuildSweep", id: "main") {
-            RootView(model: model)
+        Window("BuildSweep", id: "main") {
+            GeometryReader { geometry in
+                RootView(model: model, contentSize: geometry.size)
+                    .frame(width: geometry.size.width, height: geometry.size.height)
+            }
+                .frame(minWidth: 900, minHeight: 520)
                 .buildSweepAppearance()
                 .task { await model.bootstrap() }
         }
-        .defaultSize(width: 1080, height: 720)
+        .defaultSize(width: 1080, height: 680)
+        .windowResizability(.contentMinSize)
         .commands {
             CommandMenu("Storage") {
                 Button("Scan Xcode Storage") { model.startScan() }

@@ -443,9 +443,7 @@ final class AppModel {
             appMessage = "Quit Claude before cleaning its caches."
             return
         }
-        showingCleanupReview = false
         let result = await executor.execute(plan)
-        latestCleanupResult = result
         await historyStore.append(result)
         history = await historyStore.load()
         if result.hadAnySuccess {
@@ -459,6 +457,8 @@ final class AppModel {
             )
             self.pendingMCPReviewID = nil
         }
+        latestCleanupResult = result
+        showingCleanupReview = false
         startScan()
     }
 
