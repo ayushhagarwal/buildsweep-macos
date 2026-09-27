@@ -27,7 +27,7 @@ BuildSweep includes an optional MCP stdio helper for Claude, Codex, and other co
 
 The app must be open while the client is connected. The agent can check scan status, scan locations already authorized in BuildSweep, list and inspect bounded item summaries, and stage up to 50 items for review. Paths and file contents are not returned to the client. Staging opens BuildSweep's native cleanup review; only a person confirming in that window can move selected items to Trash. The MCP helper has no direct access to the authorized folders and provides no cleanup approval or execution tool.
 
-This feature requires a signed BuildSweep build. The app and helper use the macOS team-prefixed app group `<TeamID>.com.ayush.buildsweep`, which avoids a separate profile registration step for direct distribution. An unsigned local image will not establish the shared app-group container and is not suitable for MCP validation. The helper uses the Model Context Protocol Swift SDK, pinned to 0.12.1.
+This feature requires a signed BuildSweep build. The app and helper use the macOS team-prefixed app group `<TeamID>.com.ayush.buildsweep`, which avoids a separate profile registration step for direct distribution. An unsigned local image will not establish the shared app-group container and is not suitable for MCP validation. The helper uses the Model Context Protocol Swift SDK, pinned to 0.12.1. Protocol-level stdio checks pass; signed app/helper IPC and end-to-end client checks remain pending. No signed DMG is available yet.
 
 After building the app, run `python3 script/test_mcp_protocol.py` to smoke-test MCP initialization, tool discovery, bounded schemas, unknown-tool rejection, and stdout framing without connecting to the app.
 
@@ -69,7 +69,9 @@ Pushing a matching `v<version>` tag runs the signed release workflow. Configure 
 
 - Bundle identifier: `com.ayush.buildsweep`
 - Version: `1.0.0` (build `1`), tags `vMAJOR.MINOR.PATCH`
-- Website: https://buildsweep.ayushdev.com
+- Website source: https://github.com/ayushhagarwal/buildsweep-web
+- Planned website: https://buildsweep.ayushdev.com (not verified live; DNS did not resolve during the release check)
+- Privacy and support pages exist in the website source but are not confirmed live until that site is deployed.
 - Support: support@ayushdev.com
 
 ## Community
