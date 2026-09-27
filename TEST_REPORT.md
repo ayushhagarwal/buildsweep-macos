@@ -1,3 +1,15 @@
+# Current release preparation — 2026-09-27
+
+The latest source builds as a universal Release app. The app and embedded MCP helper were signed with Developer ID team `X42TSM29Q6`; strict signature verification passed during packaging. The newest storage-map changes are included.
+
+**Publication is blocked:** notarization of this candidate failed because the local `buildsweep-notary` Keychain profile was not found. The current `dist/BuildSweep-1.0.0.dmg` must not be published until notarization, stapling, and Gatekeeper checks succeed. An earlier candidate passed these checks, but that result does not validate the new artifact.
+
+Manual UI checks during the preceding UX work covered dashboard scrolling, visible cleanup controls, review cancellation, empty categories, and map folder navigation. End-to-end cleanup execution, signed MCP IPC/client compatibility, and the outstanding platform/accessibility checklist are not signed off.
+
+The following report is historical; its dependency and entitlement descriptions predate MCP and do not describe the current app.
+
+---
+
 # Test report
 
 This report replaces earlier notes. The local `dist/BuildSweep-1.0.0.dmg` below is a historical unsigned artifact built before the latest repository changes; it is not a current release candidate.
