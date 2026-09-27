@@ -25,7 +25,8 @@ Supported systems for a release candidate:
 - [x] Tag-triggered signing and notarization workflow is implemented.
 - [ ] Configure the five signing/notarization repository secrets listed in the README, then complete one successful signed release run.
 - [x] Publish the separate website source repository at `ayushhagarwal/buildsweep-web`.
-- [ ] Link the website repository to its Vercel project, configure the production domain, and verify the privacy and support pages return 200.
+- [x] Create the `buildsweep-web` Vercel project and link the local website checkout.
+- [ ] Verify ownership of `buildsweep.ayushdev.com` in Vercel, configure DNS and GitHub deployment integration, then verify the privacy and support pages return 200.
 
 ## Safety
 
