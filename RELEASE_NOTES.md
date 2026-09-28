@@ -16,7 +16,7 @@ Download the signed and notarized `BuildSweep-1.0.0.dmg` from this release's Ass
 
 ## Limitations
 
-- Local MCP is experimental, off by default, and requires the app to remain open. Signed IPC and Claude/Codex interoperability have not completed validation. Agents cannot approve cleanup.
+- Local MCP is off by default and requires the app to remain open. Agents can inspect authorized storage and stage items for review; only a person can approve cleanup in BuildSweep.
 - Simulator deletion and SwiftUI Preview deletion remain inspection-only.
 - Reported reclaimable space is an estimate. Moving files to Trash does not free their space until Trash is emptied.
 - Cross-version GUI, Intel runtime, and accessibility checks remain incomplete; see RELEASE_CHECKLIST.md and TEST_REPORT.md.
