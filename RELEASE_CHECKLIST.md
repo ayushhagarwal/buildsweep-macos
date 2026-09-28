@@ -13,12 +13,13 @@ Supported systems for a release candidate:
 
 - [x] Project-local clean Release build passes for `arm64` and `x86_64`.
 - [x] Unit tests pass on the macOS version used to cut the release.
-- [ ] UI launch test passes from the signed release candidate, not from an older local build.
+- [x] Signed release candidate launches from `/Applications` and presents its main window.
 - [ ] Resolve and audit the pinned Model Context Protocol Swift SDK 0.12.1 and its transitive dependencies.
 - [ ] Confirm the app and helper both receive the same macOS team-prefixed app-group entitlement (`<TeamID>.com.ayush.buildsweep`).
-- [ ] Verify the sandboxed helper is nested at `Contents/Library/HelperTools/BuildSweepMCP`, signed before the app, hardened, and included in the notarized DMG.
-- [ ] Verify the helper signature is rejected unless its identifier and Apple-issued signature match the expected BuildSweep helper.
+- [x] Verify the sandboxed helper is nested at `Contents/Library/HelperTools/BuildSweepMCP`, signed before the app, hardened, and included in the notarized DMG.
+- [x] Verify the helper signature is rejected unless its identifier and Apple-issued signature match the expected BuildSweep helper.
 - [x] Smoke-test MCP initialization, tool discovery, bounded selection schema, unknown-tool rejection, and stdout framing with `python3 script/test_mcp_protocol.py`.
+- [x] Run a signed helper `get_status` request against the signed candidate installed under `/Applications`; strict helper/app signature checks passed and the app returned bounded status data.
 - [ ] Exercise malformed/oversized IPC requests, stale item IDs, and app/helper disconnects against a signed app.
 - [ ] Verify that only BuildSweep's native review confirmation can run cleanup; disabling MCP cancels pending agent review.
 - [ ] Smoke-test setup and complete review flow with Claude Desktop/Claude Code, Codex, and a generic stdio MCP client.

@@ -81,16 +81,27 @@ fi
 
 if [[ "$LOCAL_ONLY" != "1" ]]; then
   echo "Signing with $IDENTITY"
-  codesign --force --options runtime --timestamp --sign "$IDENTITY" --entitlements "$HELPER_SIGNING_ENTITLEMENTS" "$MCP_HELPER"
+  codesign --force --options runtime --timestamp --sign "$IDENTITY" --identifier "com.ayush.buildsweep.mcp" --entitlements "$HELPER_SIGNING_ENTITLEMENTS" "$MCP_HELPER"
   codesign --verify --strict --verbose=2 "$MCP_HELPER"
   codesign --force --options runtime --timestamp --sign "$IDENTITY" --entitlements "$APP_SIGNING_ENTITLEMENTS" "$APP"
   codesign --verify --deep --strict --verbose=2 "$APP"
   HELPER_SIGNATURE="$(codesign -dv --verbose=4 "$MCP_HELPER" 2>&1)"
   APP_SIGNATURE="$(codesign -dv --verbose=4 "$APP" 2>&1)"
-  if [[ "$HELPER_SIGNATURE" != *"TeamIdentifier=${DEVELOPMENT_TEAM}"* || "$APP_SIGNATURE" != *"TeamIdentifier=${DEVELOPMENT_TEAM}"* ]]; then
+  if [[ "$HELPER_SIGNATURE" != *"Identifier=com.ayush.buildsweep.mcp"* || "$HELPER_SIGNATURE" != *"TeamIdentifier=${DEVELOPMENT_TEAM}"* || "$APP_SIGNATURE" != *"TeamIdentifier=${DEVELOPMENT_TEAM}"* ]]; then
     echo "The app and MCP helper must both be signed by team ${DEVELOPMENT_TEAM}." >&2
     exit 1
   fi
+fi
+
+if [[ "$LOCAL_ONLY" != "1" ]]; then
+  NOTARIZATION_ZIP="$STAGE/${APP_NAME}-notarization.zip"
+  ditto -c -k --keepParent "$APP" "$NOTARIZATION_ZIP"
+  echo "Submitting $APP for notarization"
+  xcrun notarytool submit "$NOTARIZATION_ZIP" --keychain-profile "$NOTARY_KEYCHAIN_PROFILE" --wait
+  xcrun stapler staple "$APP"
+  xcrun stapler validate "$APP"
+  spctl --assess --type execute --verbose=2 "$APP"
+  rm -f "$NOTARIZATION_ZIP"
 fi
 
 cp -R "$APP" "$STAGE/$APP_NAME.app"
@@ -124,11 +135,8 @@ fi
 codesign --force --timestamp --sign "$IDENTITY" "$DMG"
 echo "Submitting $DMG for notarization"
 xcrun notarytool submit "$DMG" --keychain-profile "$NOTARY_KEYCHAIN_PROFILE" --wait
-xcrun stapler staple "$APP"
 xcrun stapler staple "$DMG"
-xcrun stapler validate "$APP"
 xcrun stapler validate "$DMG"
-spctl --assess --type execute --verbose=2 "$APP"
 spctl --assess --type open --context context:primary-signature --verbose=2 "$DMG"
 
 echo "Created notarized $DMG"

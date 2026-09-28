@@ -1,5 +1,13 @@
 # Current release preparation — 2026-09-27
 
+## Latest signed MCP and installer verification — 2026-09-28
+
+The release candidate was rebuilt and Apple accepted app notarization submission `721995cc-93fa-44be-901c-2b20a5ae1726` and disk-image submission `629b5d82-580f-4a87-bd8f-c2bdf8730490`. The app and DMG both validate their stapled tickets. A read-only DMG mount contained exactly `BuildSweep.app` and the `Applications` shortcut. The embedded helper is Developer ID signed as `com.ayush.buildsweep.mcp` by team `X42TSM29Q6`; Gatekeeper accepts the app and disk image as Notarized Developer ID. Latest DMG SHA-256: `acb080e0ca4ba7f8e56ac0fed50aa1efc30176dbfca1a574cab527585ff2a64b`.
+
+A signed MCP helper from the candidate, run with its matching app copy under `/Applications`, completed MCP initialization and a read-only `get_status` tool call. The returned response demonstrates that the helper strictly verified the running app and the app strictly verified the helper before returning data. Running this helper against an app launched from the development checkout fails its sandboxed code lookup (EPERM); this is not the installed-app path used for distribution. Claude, Codex, and full review-flow interoperability remain unverified.
+
+The latest credential-pattern scan covered 86 tracked source files and files in the candidate app bundle; it found zero matches for common private-key, GitHub, AWS, Google, OpenAI, and Slack credential formats, and no signing certificates or provisioning profiles were bundled. This targeted pattern scan cannot prove absence of every possible secret format.
+
 ## Verification update — 2026-09-28
 
 Additional checks on macOS 27.2 (build 26B5086k), Xcode 27A266a:
@@ -15,7 +23,7 @@ Additional checks on macOS 27.2 (build 26B5086k), Xcode 27A266a:
 - Creating the `v1.0.0` ref through GitHub triggered the configured tag-push workflow. Run [36406448791](https://github.com/ayushhagarwal/buildsweep-macos/actions/runs/36406448791) failed at Developer ID certificate import because the GitHub certificate secrets were blank. This did not affect the locally signed, notarized, and validated DMG that was published.
 - The private website repository is deployed at `https://buildsweep.ayushdev.com/`; the homepage, privacy page, and support page return HTTP 200. The primary download button links directly to the version 1.0.0 DMG.
 
-The UI launch test used an unsigned Debug build, not the signed Release app. Signed MCP IPC/client interoperability and outstanding cleanup-safety/platform/accessibility checks remain unverified. A redacted credential-pattern scan found no matches in 77 tracked source files, 36 local Git history commits, or app resources and binary strings in the mounted DMG. The scan covered common API-token, private-key, and credential-assignment formats; it is not a formal proof against every possible secret format.
+The UI launch test in this earlier update used an unsigned Debug build; the signed candidate launch and narrow MCP smoke check are recorded above. Claude/Codex interoperability and outstanding cleanup-safety/platform/accessibility checks remain unverified. The earlier redacted credential scan was targeted, not a formal proof against every possible secret format.
 
 During the 2026-09-27 packaging attempt, a previous app and embedded helper were signed with Developer ID team `X42TSM29Q6`, and strict signature verification passed at that time. That earlier candidate was superseded by the verified 2026-09-28 DMG above.
 

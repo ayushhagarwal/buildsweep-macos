@@ -42,12 +42,16 @@ private struct BridgeRequest: Codable {
 }
 
 private enum BridgeError: Error, LocalizedError {
-    case appNotRunning
+    case appGroupUnavailable
+    case socketUnavailable(String, Int32)
+    case appSignatureUnverified(String)
     case invalidResponse
 
     var errorDescription: String? {
         switch self {
-        case .appNotRunning: "BuildSweep is not open or MCP is disabled. Open BuildSweep and enable MCP in Settings."
+        case .appGroupUnavailable: "The MCP helper could not resolve BuildSweep's signed app group. Reinstall BuildSweep and enable MCP in Settings."
+        case .socketUnavailable(let operation, let code): "BuildSweep's local MCP socket is unavailable (" + operation + ", errno " + String(code) + "). Open BuildSweep and enable MCP in Settings."
+        case .appSignatureUnverified(let reason): "The MCP helper could not verify the signed BuildSweep app (\(reason)). Reinstall BuildSweep and its MCP helper."
         case .invalidResponse: "BuildSweep returned an invalid local MCP response."
         }
     }
@@ -55,13 +59,13 @@ private enum BridgeError: Error, LocalizedError {
 
 private struct AppConnection {
     func send(operation: String, arguments: ToolArguments) throws -> String {
-        guard let socketURL = MCPBridgeConfiguration.socketURL else { throw BridgeError.appNotRunning }
+        guard let socketURL = MCPBridgeConfiguration.socketURL else { throw BridgeError.appGroupUnavailable }
         let fd = Darwin.socket(AF_UNIX, SOCK_STREAM, 0)
-        guard fd >= 0 else { throw BridgeError.appNotRunning }
+        guard fd >= 0 else { throw BridgeError.socketUnavailable("socket", errno) }
         defer { Darwin.close(fd) }
         var noSignal: Int32 = 1
         guard setsockopt(fd, SOL_SOCKET, SO_NOSIGPIPE, &noSignal, socklen_t(MemoryLayout<Int32>.size)) == 0 else {
-            throw BridgeError.appNotRunning
+            throw BridgeError.socketUnavailable("setsockopt", errno)
         }
         var timeout = timeval(tv_sec: 15, tv_usec: 0)
         _ = setsockopt(fd, SOL_SOCKET, SO_RCVTIMEO, &timeout, socklen_t(MemoryLayout<timeval>.size))
@@ -71,7 +75,7 @@ private struct AppConnection {
         address.sun_len = UInt8(MemoryLayout<sockaddr_un>.size)
         address.sun_family = sa_family_t(AF_UNIX)
         let path = socketURL.path
-        guard path.utf8.count < MemoryLayout.size(ofValue: address.sun_path) else { throw BridgeError.appNotRunning }
+        guard path.utf8.count < MemoryLayout.size(ofValue: address.sun_path) else { throw BridgeError.socketUnavailable("path", ENAMETOOLONG) }
         withUnsafeMutableBytes(of: &address.sun_path) { bytes in
             bytes.copyBytes(from: Array(path.utf8) + [0])
         }
@@ -80,8 +84,8 @@ private struct AppConnection {
                 Darwin.connect(fd, $0, socklen_t(MemoryLayout<sockaddr_un>.size))
             }
         }
-        guard connected == 0 else { throw BridgeError.appNotRunning }
-        guard verifyBuildSweepPeer(fd) else { throw BridgeError.appNotRunning }
+        guard connected == 0 else { throw BridgeError.socketUnavailable("connect", errno) }
+        if let failure = verifyBuildSweepPeer(fd) { throw BridgeError.appSignatureUnverified(failure) }
 
         let argsData = try JSONEncoder().encode(arguments)
         guard let args = String(data: argsData, encoding: .utf8) else { throw BridgeError.invalidResponse }
@@ -114,26 +118,11 @@ private struct AppConnection {
             var written = 0
             while written < bytes.count {
                 let count = Darwin.write(fd, base.advanced(by: written), bytes.count - written)
-                guard count > 0 else { throw BridgeError.appNotRunning }
+                guard count > 0 else { throw BridgeError.socketUnavailable("write", errno) }
                 written += count
             }
         }
     }
-}
-
-private func verifyBuildSweepPeer(_ fd: Int32) -> Bool {
-    var pid: pid_t = 0
-    var size = socklen_t(MemoryLayout<pid_t>.size)
-    guard getsockopt(fd, SOL_LOCAL, LOCAL_PEERPID, &pid, &size) == 0, pid > 0 else { return false }
-    var guest: SecCode?
-    guard SecCodeCopyGuestWithAttributes(nil, [kSecGuestAttributePid: NSNumber(value: pid)] as CFDictionary, [], &guest) == errSecSuccess,
-          let guest,
-          let teamID = currentTeamIdentifier() else { return false }
-    let requirement = "identifier \"\(MCPBridgeConfiguration.appBundleIdentifier)\" and anchor apple generic and certificate leaf[subject.OU] = \"\(teamID)\""
-    var codeRequirement: SecRequirement?
-    guard SecRequirementCreateWithString(requirement as CFString, [], &codeRequirement) == errSecSuccess,
-          let codeRequirement else { return false }
-    return SecCodeCheckValidity(guest, SecCSFlags(rawValue: kSecCSStrictValidate), codeRequirement) == errSecSuccess
 }
 
 private func currentTeamIdentifier() -> String? {
@@ -145,6 +134,22 @@ private func currentTeamIdentifier() -> String? {
     guard SecCodeCopySigningInformation(staticCode, SecCSFlags(rawValue: kSecCSSigningInformation), &information) == errSecSuccess,
           let information = information as? [String: Any] else { return nil }
     return information[kSecCodeInfoTeamIdentifier as String] as? String
+}
+
+private func verifyBuildSweepPeer(_ fd: Int32) -> String? {
+    var pid: pid_t = 0
+    var size = socklen_t(MemoryLayout<pid_t>.size)
+    guard getsockopt(fd, SOL_LOCAL, LOCAL_PEERPID, &pid, &size) == 0, pid > 0 else { return "peer PID lookup (errno \(errno))" }
+    var guest: SecCode?
+    let guestStatus = SecCodeCopyGuestWithAttributes(nil, [kSecGuestAttributePid: NSNumber(value: pid)] as CFDictionary, [], &guest)
+    guard guestStatus == errSecSuccess, let guest else { return "peer code lookup (status \(guestStatus))" }
+    guard let teamID = currentTeamIdentifier() else { return "helper signing team lookup" }
+    let requirement = "identifier \"\(MCPBridgeConfiguration.appBundleIdentifier)\" and anchor apple generic and certificate leaf[subject.OU] = \"\(teamID)\""
+    var codeRequirement: SecRequirement?
+    let requirementStatus = SecRequirementCreateWithString(requirement as CFString, [], &codeRequirement)
+    guard requirementStatus == errSecSuccess, let codeRequirement else { return "requirement creation (status \(requirementStatus))" }
+    let validityStatus = SecCodeCheckValidity(guest, SecCSFlags(rawValue: kSecCSStrictValidate), codeRequirement)
+    return validityStatus == errSecSuccess ? nil : "strict app signature check (status \(validityStatus))"
 }
 
 Task {

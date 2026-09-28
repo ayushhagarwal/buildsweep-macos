@@ -185,6 +185,7 @@ ui_settings = {
 helper_settings = {
   "CODE_SIGN_ENTITLEMENTS" => "BuildSweepMCP/BuildSweepMCP.entitlements",
   "CODE_SIGN_STYLE" => "Automatic", "ENABLE_APP_SANDBOX" => "YES",
+  "CREATE_INFOPLIST_SECTION_IN_BINARY" => "YES",
   "ENABLE_HARDENED_RUNTIME" => "YES", "GENERATE_INFOPLIST_FILE" => "YES",
   "MACOSX_DEPLOYMENT_TARGET" => "14.0", "PRODUCT_BUNDLE_IDENTIFIER" => "com.ayush.buildsweep.mcp",
   "PRODUCT_NAME" => "BuildSweepMCP", "SKIP_INSTALL" => "YES", "SWIFT_VERSION" => "6.0"
