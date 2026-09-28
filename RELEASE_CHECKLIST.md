@@ -27,8 +27,8 @@ Supported systems for a release candidate:
 - [x] Publish the separate website source repository at `ayushhagarwal/buildsweep-web`.
 - [x] Create the `buildsweep-web` Vercel project and link the local website checkout.
 - [x] Verify that pushes to the private website repository's `main` branch create a Ready Vercel production deployment.
-- [ ] Verify ownership of `buildsweep.ayushdev.com` in Vercel, add it to the project, and configure its DNS record at the registrar.
-- [ ] Verify the public privacy and support pages return 200 after the custom domain resolves; current Vercel deployment URLs require SSO.
+- [x] Verify that `buildsweep.ayushdev.com` resolves to the live Vercel site.
+- [x] Verify the public privacy and support pages return HTTP 200 on the custom domain.
 
 ## Safety
 
@@ -63,6 +63,6 @@ Direct distribution needs a Developer ID Application signature and Apple notariz
 ## Trust
 
 - [x] Review the privacy manifest in `BuildSweep/PrivacyInfo.xcprivacy`.
-- [ ] Privacy and support pages are live at the production domain, or the README states that they are not yet live.
-- [ ] The disk image and tag contain no credentials, provisioning profiles, or private notes.
+- [x] Privacy and support pages are live at the production domain and return HTTP 200.
+- [x] Inspect the published DMG contents and scan the app bundle, tracked source, and local Git history for common credential patterns; no matches or provisioning profiles were found in the DMG.
 - [ ] Add current product screenshots to the README or project website before promoting the release broadly.
