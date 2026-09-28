@@ -26,7 +26,9 @@ Supported systems for a release candidate:
 - [ ] Configure the five signing/notarization repository secrets listed in the README, then complete one successful signed release run.
 - [x] Publish the separate website source repository at `ayushhagarwal/buildsweep-web`.
 - [x] Create the `buildsweep-web` Vercel project and link the local website checkout.
-- [ ] Verify ownership of `buildsweep.ayushdev.com` in Vercel, configure DNS and GitHub deployment integration, then verify the privacy and support pages return 200.
+- [x] Verify that pushes to the private website repository's `main` branch create a Ready Vercel production deployment.
+- [ ] Verify ownership of `buildsweep.ayushdev.com` in Vercel, add it to the project, and configure its DNS record at the registrar.
+- [ ] Verify the public privacy and support pages return 200 after the custom domain resolves; current Vercel deployment URLs require SSO.
 
 ## Safety
 
@@ -49,14 +51,14 @@ Supported systems for a release candidate:
 
 Direct distribution needs a Developer ID Application signature and Apple notarization. An ad-hoc or development signature is not a public download.
 
-- [ ] Sign the nested MCP helper with Developer ID, Hardened Runtime, and `BuildSweepMCP/BuildSweepMCP.entitlements`, then sign the Release `.app` with the app-group and App Sandbox entitlements in `BuildSweep/BuildSweep.entitlements`.
-- [ ] `codesign --verify --deep --strict --verbose=2 BuildSweep.app` passes.
-- [ ] `codesign -dvvv --entitlements :- BuildSweep.app` shows only App Sandbox, user-selected read/write access, app-group access, and the local socket server entitlement.
-- [ ] The nested helper's entitlements show App Sandbox, the shared app group, and local socket client access; it has no user-selected folder access.
-- [ ] Submit the app or disk image with `xcrun notarytool submit`, wait until the status is Accepted, and staple the ticket with `xcrun stapler staple`.
-- [ ] `spctl --assess --type execute --verbose BuildSweep.app` reports accepted.
+- [x] Sign the nested MCP helper with Developer ID, Hardened Runtime, and `BuildSweepMCP/BuildSweepMCP.entitlements`, then sign the Release `.app` with the app-group and App Sandbox entitlements in `BuildSweep/BuildSweep.entitlements`.
+- [x] `codesign --verify --deep --strict --verbose=2 BuildSweep.app` passes.
+- [x] `codesign -dvvv --entitlements :- BuildSweep.app` shows only App Sandbox, user-selected read/write access, app-group access, and the local socket server entitlement.
+- [x] The nested helper's entitlements show App Sandbox, the shared app group, and local socket client access; it has no user-selected folder access.
+- [x] Submit the disk image with `xcrun notarytool submit`, wait until the status is Accepted, and staple the ticket with `xcrun stapler staple`.
+- [x] `spctl --assess --type execute --verbose BuildSweep.app` reports accepted.
 - [ ] The disk image opens, the app copies out of it, and Gatekeeper launches it without an “unidentified developer” warning.
-- [ ] Run `./script/package_dmg.sh` with a Developer ID Application certificate and `NOTARY_KEYCHAIN_PROFILE` set. The script must notarize, staple, and pass `spctl` before the `BuildSweep-<version>.dmg` is published with its git tag.
+- [x] Run `./script/package_dmg.sh` with a Developer ID Application certificate and `NOTARY_KEYCHAIN_PROFILE` set. The script must notarize, staple, and pass `spctl` before the `BuildSweep-<version>.dmg` is published with its git tag.
 
 ## Trust
 

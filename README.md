@@ -8,9 +8,9 @@ There are no product screenshots in this repository yet.
 
 ## Download and install
 
-Public downloads are `BuildSweep-<version>.dmg` on [GitHub Releases](https://github.com/ayushhagarwal/buildsweep-macos/releases). A notarized 1.0.0 disk image is not attached yet. Until that file is published, build from source with the steps below. An unsigned local image is not a public download: Gatekeeper will reject it.
+Public downloads are `BuildSweep-<version>.dmg` on [GitHub Releases](https://github.com/ayushhagarwal/buildsweep-macos/releases). The signed and notarized `BuildSweep-1.0.0.dmg` is available there. An unsigned local image is not a public download: Gatekeeper will reject it.
 
-When a notarized disk image is published:
+To install:
 
 1. Download `BuildSweep-<version>.dmg` from Releases.
 2. Open the disk image and drag BuildSweep to Applications.
@@ -27,7 +27,7 @@ BuildSweep includes an optional MCP stdio helper for Claude, Codex, and other co
 
 The app must be open while the client is connected. The agent can check scan status, scan locations already authorized in BuildSweep, list and inspect bounded item summaries, and stage up to 50 items for review. Paths and file contents are not returned to the client. Staging opens BuildSweep's native cleanup review; only a person confirming in that window can move selected items to Trash. The MCP helper has no direct access to the authorized folders and provides no cleanup approval or execution tool.
 
-This feature requires a signed BuildSweep build. The app and helper use the macOS team-prefixed app group `<TeamID>.com.ayush.buildsweep`, which avoids a separate profile registration step for direct distribution. An unsigned local image will not establish the shared app-group container and is not suitable for MCP validation. The helper uses the Model Context Protocol Swift SDK, pinned to 0.12.1. Protocol-level stdio checks pass; signed app/helper IPC and end-to-end client checks remain pending. No signed DMG is available yet.
+This feature requires a signed BuildSweep build. The app and helper use the macOS team-prefixed app group `<TeamID>.com.ayush.buildsweep`, which avoids a separate profile registration step for direct distribution. An unsigned local image will not establish the shared app-group container and is not suitable for MCP validation. The helper uses the Model Context Protocol Swift SDK, pinned to 0.12.1. Local MCP is experimental: protocol-level stdio checks pass, while signed app/helper IPC and end-to-end client checks remain pending. Agents cannot bypass the app's native cleanup confirmation.
 
 After building the app, run `python3 script/test_mcp_protocol.py` to smoke-test MCP initialization, tool discovery, bounded schemas, unknown-tool rejection, and stdout framing without connecting to the app.
 
@@ -70,8 +70,8 @@ Pushing a matching `v<version>` tag runs the signed release workflow. Configure 
 - Bundle identifier: `com.ayush.buildsweep`
 - Version: `1.0.0` (build `1`), tags `vMAJOR.MINOR.PATCH`
 - Website source: https://github.com/ayushhagarwal/buildsweep-web
-- Planned website: https://buildsweep.ayushdev.com (not verified live; DNS did not resolve during the release check)
-- Privacy and support pages exist in the website source but are not confirmed live until that site is deployed.
+- Website source: private repository at https://github.com/ayushhagarwal/buildsweep-web; its latest copy changes deploy to Vercel successfully.
+- Website domain: https://buildsweep.ayushdev.com is not configured or resolving yet. Current Vercel deployment URLs require SSO; privacy and support pages are not publicly accessible until domain and deployment access are configured.
 - Support: support@ayushdev.com
 
 ## Community

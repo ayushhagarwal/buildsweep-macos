@@ -1,4 +1,4 @@
-# BuildSweep 1.0.0 — release candidate
+# BuildSweep 1.0.0
 
 BuildSweep is a free, MIT-licensed macOS app for inspecting developer storage and reviewing selected cleanup in a native confirmation screen.
 
@@ -12,7 +12,7 @@ BuildSweep is a free, MIT-licensed macOS app for inspecting developer storage an
 
 ## Installation
 
-After a notarized installer is attached, open the DMG, drag BuildSweep to Applications, and launch it from Applications. Authorize folders in the app before scanning. Select items and choose Review Cleanup; only your confirmation moves eligible items to Trash.
+Download the signed and notarized `BuildSweep-1.0.0.dmg` from this release's Assets, open it, drag BuildSweep to Applications, and launch it from Applications. Authorize folders in the app before scanning. Select items and choose Review Cleanup; only your confirmation moves eligible items to Trash.
 
 ## Limitations
 
@@ -21,6 +21,6 @@ After a notarized installer is attached, open the DMG, drag BuildSweep to Applic
 - Reported reclaimable space is an estimate. Moving files to Trash does not free their space until Trash is emptied.
 - Cross-version GUI, Intel runtime, and accessibility checks remain incomplete; see RELEASE_CHECKLIST.md and TEST_REPORT.md.
 
-## Publication status
+## Download
 
-Draft only. The latest DMG is signed but awaiting successful notarization and Gatekeeper validation. No installer is attached until those checks pass.
+Download `BuildSweep-1.0.0.dmg` from the Assets section of this GitHub release. The installer has passed Developer ID signature verification, Apple notarization, stapling, Gatekeeper assessment, and disk-image contents checks.

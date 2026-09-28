@@ -1,8 +1,25 @@
 # Current release preparation — 2026-09-27
 
-The latest source builds as a universal Release app. The app and embedded MCP helper were signed with Developer ID team `X42TSM29Q6`; strict signature verification passed during packaging. The newest storage-map changes are included.
+## Verification update — 2026-09-28
 
-**Publication is blocked:** notarization of this candidate failed because the local `buildsweep-notary` Keychain profile was not found. The current `dist/BuildSweep-1.0.0.dmg` must not be published until notarization, stapling, and Gatekeeper checks succeed. An earlier candidate passed these checks, but that result does not validate the new artifact.
+Additional checks on macOS 27.2 (build 26B5086k), Xcode 27A266a:
+
+- `./script/test.sh` passes after the test runner was constrained to the host architecture (`uname -m`, with `ONLY_ACTIVE_ARCH=YES`). It ran 32 unit tests and `BuildSweepUITests.testLaunchShowsOnboardingOrOverview`; all passed. Result bundle: `/Users/ayush/Desktop/Desktop/Projects/BuildSweep/buildsweep-ios/DerivedData/Logs/Test/Test-BuildSweep-2026.09.28_09-02-26-+0530.xcresult`.
+- `python3 script/test_mcp_protocol.py` passes initialization, tool schemas, bounds, unknown-tool rejection, and stdout framing. This remains a protocol-level smoke test; it does not validate signed IPC or Claude/Codex interoperability.
+- `env DEVELOPMENT_TEAM=X42TSM29Q6 NOTARY_KEYCHAIN_PROFILE=buildsweep-notary ./script/package_dmg.sh` completed successfully when allowed to access the login Keychain outside the workspace sandbox. A separate unsigned universal Release build also succeeded during diagnosis; both app and helper built with `arm64` and `x86_64` slices.
+- The first default-architecture Debug test attempt failed linking the MCP helper for `x86_64` with unresolved SDK symbols. Constraining the test runner to the host architecture fixed the test command. The universal Release build succeeds independently.
+- The Keychain profile and seven valid signing identities were available when queried outside the sandbox. Earlier in-sandbox Keychain errors were misleading; there is no evidence that the credentials expired.
+- Apple accepted notarization submission `95d02fe8-4b08-441e-8595-446452e8029a`. The app and DMG stapled tickets and passed `stapler validate`. The app and helper signatures verify with team `X42TSM29Q6`; the app-group and expected app/helper sandbox entitlements were confirmed.
+- Gatekeeper accepted both the app and DMG as `Notarized Developer ID`. The image checksum verified, and a read-only mount contained exactly `BuildSweep.app` and the `Applications` shortcut. DMG SHA-256: `97ad003a65722f46d1cc0d2a0b93f97a92b6287bd0b76bd287d08cdb168aee67`.
+- The verified DMG is published at [GitHub Releases](https://github.com/ayushhagarwal/buildsweep-macos/releases/tag/v1.0.0). Its SHA-256 is `97ad003a65722f46d1cc0d2a0b93f97a92b6287bd0b76bd287d08cdb168aee67`.
+- Creating the `v1.0.0` ref through GitHub triggered the configured tag-push workflow. Run [36406448791](https://github.com/ayushhagarwal/buildsweep-macos/actions/runs/36406448791) failed at Developer ID certificate import because the GitHub certificate secrets were blank. This did not affect the locally signed, notarized, and validated DMG that was published.
+- Website updates were pushed to the private source repo; Vercel created a Ready Production deployment. The custom domain `buildsweep.ayushdev.com` is not connected; setup is deferred until the user handles it as the final minor item. Deployment URLs currently redirect to Vercel SSO, so public privacy and support page checks remain pending.
+
+The UI launch test used an unsigned Debug build, not the signed Release app. Signed MCP IPC/client compatibility and outstanding safety/platform/accessibility checks remain unverified. MCP remains experimental.
+
+During the 2026-09-27 packaging attempt, a previous app and embedded helper were signed with Developer ID team `X42TSM29Q6`, and strict signature verification passed at that time. That earlier candidate was superseded by the verified 2026-09-28 DMG above.
+
+**Publication complete:** the locally signed and notarized DMG is published. The tag-triggered GitHub signing workflow remains misconfigured because its required GitHub secrets are absent; a future automated release run requires those secrets or a revised workflow.
 
 Manual UI checks during the preceding UX work covered dashboard scrolling, visible cleanup controls, review cancellation, empty categories, and map folder navigation. End-to-end cleanup execution, signed MCP IPC/client compatibility, and the outstanding platform/accessibility checklist are not signed off.
 
