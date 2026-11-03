@@ -139,23 +139,35 @@ final class MCPAgentSocketServer: @unchecked Sendable {
     }
 
     private func verifyHelperPeer(_ fd: Int32) -> Bool {
-        var pid: pid_t = 0
-        var size = socklen_t(MemoryLayout<pid_t>.size)
-        guard getsockopt(fd, SOL_LOCAL, LOCAL_PEERPID, &pid, &size) == 0, pid > 0 else { return false }
-        var guest: SecCode?
-        let status = SecCodeCopyGuestWithAttributes(
-            nil,
-            [kSecGuestAttributePid: NSNumber(value: pid)] as CFDictionary,
-            [],
-            &guest
-        )
-        guard status == errSecSuccess, let guest else { return false }
+        guard let guest = guestCodeForPeer(fd) else { return false }
         guard let teamID = signingTeamIdentifier(of: Self.selfCode) else { return false }
         let requirement = "identifier \"\(MCPBridgeConfiguration.helperBundleIdentifier)\" and anchor apple generic and certificate leaf[subject.OU] = \"\(teamID)\""
         var codeRequirement: SecRequirement?
         guard SecRequirementCreateWithString(requirement as CFString, [], &codeRequirement) == errSecSuccess,
               let codeRequirement else { return false }
         return SecCodeCheckValidity(guest, SecCSFlags(rawValue: kSecCSStrictValidate), codeRequirement) == errSecSuccess
+    }
+
+    /// Code identity for the process that connected to this socket, from its audit token.
+    private func guestCodeForPeer(_ fd: Int32) -> SecCode? {
+        var token = audit_token_t()
+        var size = socklen_t(MemoryLayout<audit_token_t>.size)
+        guard getsockopt(fd, SOL_LOCAL, LOCAL_PEERTOKEN, &token, &size) == 0,
+              size == socklen_t(MemoryLayout<audit_token_t>.size) else {
+            return nil
+        }
+        let tokenData = withUnsafePointer(to: &token) { pointer in
+            NSData(bytes: UnsafeRawPointer(pointer), length: MemoryLayout<audit_token_t>.size)
+        }
+        var guest: SecCode?
+        let status = SecCodeCopyGuestWithAttributes(
+            nil,
+            [kSecGuestAttributeAudit: tokenData] as CFDictionary,
+            [],
+            &guest
+        )
+        guard status == errSecSuccess else { return nil }
+        return guest
     }
 
     private static var selfCode: SecCode? {

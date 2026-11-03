@@ -19,6 +19,18 @@ final class PathSafetyTests: XCTestCase {
         XCTAssertEqual(try CleanupPathPolicy().validate(item, inside: fixtureRoot), url.canonicalFileURL)
     }
 
+    func testRejectsDerivedDataWhenAuthorizedRootTextRepeatsInsideThePath() throws {
+        let root = fixtureRoot.canonicalFileURL
+        let nested = URL(fileURLWithPath: root.path + "/Xcode" + root.path + "/DerivedData/Atlas-hash", isDirectory: true)
+        try FileManager.default.createDirectory(at: nested, withIntermediateDirectories: true)
+        let item = StorageItem(category: .derivedData, kind: .derivedData, displayName: "Atlas", url: nested, size: 10, risk: .regenerates, action: .trash)
+        XCTAssertThrowsError(try CleanupPathPolicy().validate(item, inside: root)) { error in
+            guard case CleanupPolicyError.ruleMismatch = error else {
+                return XCTFail("Expected a rule mismatch, got \(error)")
+            }
+        }
+    }
+
     func testRealUserHomeIsNotSandboxContainer() {
         XCTAssertFalse(RealUserHome.directory.path.contains("/Library/Containers/"))
         XCTAssertEqual(RealUserHome.developerDirectory.lastPathComponent, "Developer")

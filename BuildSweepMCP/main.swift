@@ -137,11 +137,24 @@ private func currentTeamIdentifier() -> String? {
 }
 
 private func verifyBuildSweepPeer(_ fd: Int32) -> String? {
-    var pid: pid_t = 0
-    var size = socklen_t(MemoryLayout<pid_t>.size)
-    guard getsockopt(fd, SOL_LOCAL, LOCAL_PEERPID, &pid, &size) == 0, pid > 0 else { return "peer PID lookup (errno \(errno))" }
+    var token = audit_token_t()
+    var size = socklen_t(MemoryLayout<audit_token_t>.size)
+    guard getsockopt(fd, SOL_LOCAL, LOCAL_PEERTOKEN, &token, &size) == 0 else {
+        return "peer audit token lookup (errno \(errno))"
+    }
+    guard size == socklen_t(MemoryLayout<audit_token_t>.size) else {
+        return "peer audit token lookup returned an unexpected token size"
+    }
+    let tokenData = withUnsafePointer(to: &token) { pointer in
+        NSData(bytes: UnsafeRawPointer(pointer), length: MemoryLayout<audit_token_t>.size)
+    }
     var guest: SecCode?
-    let guestStatus = SecCodeCopyGuestWithAttributes(nil, [kSecGuestAttributePid: NSNumber(value: pid)] as CFDictionary, [], &guest)
+    let guestStatus = SecCodeCopyGuestWithAttributes(
+        nil,
+        [kSecGuestAttributeAudit: tokenData] as CFDictionary,
+        [],
+        &guest
+    )
     guard guestStatus == errSecSuccess, let guest else { return "peer code lookup (status \(guestStatus))" }
     guard let teamID = currentTeamIdentifier() else { return "helper signing team lookup" }
     let requirement = "identifier \"\(MCPBridgeConfiguration.appBundleIdentifier)\" and anchor apple generic and certificate leaf[subject.OU] = \"\(teamID)\""

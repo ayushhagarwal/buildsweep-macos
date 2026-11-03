@@ -134,8 +134,17 @@ struct CleanupPathPolicy: Sendable {
         !relative.contains("/") && names.contains(relative)
     }
 
+    /// Relative path under `root`, with that leading prefix removed once.
+    /// Nil unless every component of `root` is a leading component of `candidate`.
+    private func relativePath(of candidate: URL, under root: URL) -> String? {
+        let rootComponents = root.pathComponents
+        let candidateComponents = candidate.pathComponents
+        guard !rootComponents.isEmpty, candidateComponents.starts(with: rootComponents) else { return nil }
+        return candidateComponents.dropFirst(rootComponents.count).joined(separator: "/")
+    }
+
     private func matchesRule(_ item: StorageItem, candidate: URL, root: URL) -> Bool {
-        let relative = candidate.path.replacingOccurrences(of: root.path + "/", with: "")
+        guard let relative = relativePath(of: candidate, under: root) else { return false }
         switch item.kind {
         case .derivedData:
             let parts = relative.split(separator: "/")

@@ -35,14 +35,63 @@ jobs:
           keychain_path="$RUNNER_TEMP/buildsweep-signing.keychain-db"
           keychain_password="$(openssl rand -hex 24)"
           certificate_path="$RUNNER_TEMP/developer-id.p12"
+          command_path="$RUNNER_TEMP/buildsweep-security-command"
+          cleanup_secrets() {
+            rm -f "$certificate_path" "$command_path"
+          }
+          trap cleanup_secrets EXIT
+          umask 077
           printf '%s' "$CERTIFICATE_BASE64" | base64 --decode > "$certificate_path"
-          security create-keychain -p "$keychain_password" "$keychain_path"
+          chmod 600 "$certificate_path"
+
+          # security(1) has no password-file flag. Interactive mode reads the
+          # command from stdin, so the secret is not part of the process argv.
+          security_quote() {
+            local value=$1
+            local out='"'
+            local i=0
+            local char
+            case "$value" in
+              *$'\n'*|*$'\r'*)
+                echo "A signing secret contains a newline and cannot be passed safely." >&2
+                return 1
+                ;;
+            esac
+            while [[ $i -lt ${#value} ]]; do
+              char=${value:i:1}
+              case "$char" in
+                \\|'"') out="${out}\\${char}" ;;
+                *) out="${out}${char}" ;;
+              esac
+              i=$((i + 1))
+            done
+            printf '%s"' "$out"
+          }
+
+          run_security_command() {
+            local line=$1
+            local line_bytes
+            line_bytes=$(printf '%s' "$line" | wc -c | tr -d '[:space:]')
+            if [[ "$line_bytes" -gt 4000 ]]; then
+              echo "A security command is too long to send without truncation." >&2
+              return 1
+            fi
+            install -m 600 /dev/null "$command_path"
+            printf '%s\n' "$line" > "$command_path"
+            chmod 600 "$command_path"
+            security -i < "$command_path"
+          }
+
+          quoted_keychain_password=$(security_quote "$keychain_password") || exit 1
+          quoted_keychain_path=$(security_quote "$keychain_path") || exit 1
+          quoted_certificate_path=$(security_quote "$certificate_path") || exit 1
+          quoted_certificate_password=$(security_quote "$CERTIFICATE_PASSWORD") || exit 1
+          run_security_command "create-keychain -p ${quoted_keychain_password} ${quoted_keychain_path}"
           security set-keychain-settings -lut 21600 "$keychain_path"
-          security unlock-keychain -p "$keychain_password" "$keychain_path"
-          security import "$certificate_path" -k "$keychain_path" -P "$CERTIFICATE_PASSWORD" -T /usr/bin/codesign
-          security set-key-partition-list -S apple-tool:,apple: -s -k "$keychain_password" "$keychain_path"
+          run_security_command "unlock-keychain -p ${quoted_keychain_password} ${quoted_keychain_path}"
+          run_security_command "import ${quoted_certificate_path} -k ${quoted_keychain_path} -P ${quoted_certificate_password} -T /usr/bin/codesign"
+          run_security_command "set-key-partition-list -S apple-tool:,apple: -s -k ${quoted_keychain_password} ${quoted_keychain_path}"
           security default-keychain -d user -s "$keychain_path"
-          rm -f "$certificate_path"
 
       - name: Configure notarization credentials
         env:
@@ -73,4 +122,5 @@ jobs:
       - name: Remove signing keychain
         if: always()
         run: |
+          rm -f "$RUNNER_TEMP/developer-id.p12" "$RUNNER_TEMP/buildsweep-security-command"
           security delete-keychain "$RUNNER_TEMP/buildsweep-signing.keychain-db" || true
